@@ -1,11 +1,13 @@
-# Render Blueprint — KINKEEPER API + workers + Telegram bot
-# QVAC node is NOT deployed here — run locally only (see MASTER_RELEASE_DOCUMENT.md)
+# Render Blueprint — KINKEEPER API (free tier)
+# Docs: https://render.com/docs/blueprint-spec
+# If Blueprint sync fails, use manual Web Service deploy (see MASTER_RELEASE_DOCUMENT.md §25)
 services:
   - type: web
     name: kinkeeper-api
     runtime: node
     plan: free
-    region: frankfurt
+    region: oregon
+    branch: main
     buildCommand: npm install && npm run build -w @kinkeeper/shared -w @kinkeeper/db -w @kinkeeper/qvac -w @kinkeeper/api
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /health
@@ -16,6 +18,41 @@ services:
         value: production
       - key: LOG_LEVEL
         value: info
-      - key: APP_PORT
-        value: "10000"
-      # Set all secrets in Render Dashboard → Environment (see MASTER_RELEASE_DOCUMENT.md §25)
+      - key: APP_URL
+        value: https://kinkeeper-web.vercel.app
+      - key: API_URL
+        value: https://kinkeeper-api.onrender.com
+      - key: CORS_ORIGINS
+        value: https://kinkeeper-web.vercel.app
+      - key: EVIDENCE_DIR
+        value: /tmp/evidence
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: TELEGRAM_ENABLED
+        value: "true"
+      - key: TELEGRAM_LINK_TOKEN_TTL_SEC
+        value: "900"
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: PRIVY_APP_ID
+        sync: false
+      - key: PRIVY_APP_SECRET
+        sync: false
+      - key: QVAC_NODE_SECRET
+        sync: false
+      - key: QVAC_NODE_URL
+        sync: false
+      - key: JWT_PRIVATE_KEY
+        sync: false
+      - key: JWT_PUBLIC_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
