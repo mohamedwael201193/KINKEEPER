@@ -1,0 +1,52 @@
+{
+  "name": "kinkeeper",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "KINKEEPER × AETHER — local-first family AI protection platform",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "qvac:smoke": "tsx scripts/qvac-smoke.ts",
+    "download:medpsy": "dotenv -e .env -- tsx scripts/download-medpsy.ts",
+    "qvac:runtime": "dotenv -e .env -- tsx scripts/qvac-runtime-verify.ts",
+    "delegate:smoke": "dotenv -e .env -- tsx scripts/delegate-smoke.ts",
+    "delegate:verify": "dotenv -e .env -- tsx scripts/delegate-verify.ts",
+    "p2p:verify": "dotenv -e .env -- tsx scripts/delegate-p2p-verify.ts verify",
+    "p2p:consumer": "dotenv -e .env -- tsx scripts/delegate-p2p-verify.ts consumer",
+    "e2e:verify": "dotenv -e .env -- tsx scripts/e2e-verify.ts",
+    "verify:db": "dotenv -e .env -- tsx scripts/verify-db.ts",
+    "db:generate": "dotenv -e .env -- npm run generate -w @kinkeeper/db",
+    "db:migrate": "dotenv -e .env -- npm run migrate -w @kinkeeper/db",
+    "db:push": "dotenv -e .env -- npm run push -w @kinkeeper/db",
+    "dev:api": "dotenv -e .env -- tsx watch apps/api/src/main.ts",
+    "dev:qvac-node": "dotenv -e .env -- tsx watch apps/qvac-node/src/main.ts",
+    "dev:web": "dotenv -e .env -- npm run dev -w @kinkeeper/web",
+    "start:api": "dotenv -e .env -- node apps/api/dist/main.js",
+    "start:qvac-node": "dotenv -e .env -- node apps/qvac-node/dist/main.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "@types/node": "^22.15.29",
+    "dotenv": "^16.5.0",
+    "dotenv-cli": "^8.0.0",
+    "eslint": "^9.28.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0",
+    "vitest": "^3.2.1"
+  },
+  "engines": {
+    "node": ">=22.17.0",
+    "npm": ">=10.9.0"
+  }
+}
