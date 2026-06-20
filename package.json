@@ -12,6 +12,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build -w @kinkeeper/shared && npm run build -w @kinkeeper/web",
+    "build:api": "npm run build -w @kinkeeper/shared && npm run build -w @kinkeeper/db && npm run build -w @kinkeeper/qvac && npm run build -w @kinkeeper/api",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

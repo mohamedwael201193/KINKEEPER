@@ -30,6 +30,7 @@
     "zod": "^3.25.42"
   },
   "devDependencies": {
+    "@types/node": "^22.15.29",
     "tsx": "^4.19.4",
     "vitest": "^3.2.1"
   }
