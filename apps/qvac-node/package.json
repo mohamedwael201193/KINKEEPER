@@ -1,0 +1,24 @@
+{
+  "name": "@kinkeeper/qvac-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.1",
+    "@kinkeeper/db": "*",
+    "@kinkeeper/qvac": "*",
+    "@kinkeeper/shared": "*",
+    "dotenv": "^16.5.0",
+    "fastify": "^5.3.3",
+    "zod": "^3.25.42"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4"
+  }
+}
