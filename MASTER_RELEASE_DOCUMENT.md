@@ -963,39 +963,21 @@ See `DEMO_RUNBOOK.md` for frozen commands. Summary:
 
 ## 20. Documentation cleanup plan
 
-**Do not delete until reviewed.** 26 root markdown files audited:
+**Status: EXECUTED 2026-06-20** — redundant root markdown files removed from repository.
 
-| File | Decision | Reason |
-|------|----------|--------|
-| `MASTER_RELEASE_DOCUMENT.md` | **KEEP** | Single source of truth (this file) |
-| `README.md` | **KEEP** (update) | Entry point — must sync with current state (frontend exists, add link to master doc) |
-| `DEMO_RUNBOOK.md` | **KEEP** | Judge reproduction path |
-| `ENV_REQUIREMENTS.md` | **MERGE → MASTER** | Env vars now in Section 6; delete after review |
-| `DEPLOYMENT_READINESS_REPORT.md` | **MERGE → MASTER** | Superseded by Sections 16–17, 22 |
-| `RELEASE_READINESS_REPORT.md` | **MERGE → MASTER** | Superseded by Sections 14, 24 |
-| `PRODUCTION_READINESS_REPORT.md` | **MERGE → MASTER** | Historical fixes documented in Section 15 |
-| `BACKEND_COMPLETION_REPORT.md` | **DELETE** (after review) | Historical phase audit |
-| `BACKEND_DECISION.md` | **DELETE** (after review) | ADR captured in Section 2 |
-| `BACKEND_MAXIMUM_SCORE_READINESS.md` | **MERGE → MASTER** | Telegram/evidence proof in Sections 8, 12 |
-| `COGNOSCENTE_E2E_REPORT.md` | **KEEP** (evidence) | Generated proof artifact reference |
-| `SENTINEL_E2E_REPORT.md` | **KEEP** (evidence) | Generated proof artifact reference |
-| `QVAC_RUNTIME_REPORT.md` | **KEEP** (evidence) | Generated proof artifact reference |
-| `EVIDENCE_SYSTEM_REPORT.md` | **KEEP** (evidence) | Chain verification proof |
-| `DELEGATION_VERIFICATION_REPORT.md` | **KEEP** (evidence) | QVAC delegation proof |
-| `TRUE_P2P_VERIFICATION_REPORT.md` | **KEEP** (evidence) | P2P proof |
-| `SDK_013_MIGRATION_REPORT.md` | **DELETE** (after review) | Migration complete; note in Section 1 |
-| `FINAL_PRE_FRONTEND_REPORT.md` | **DELETE** | Obsolete — frontend built |
-| `IMPLEMENTATION_TODO.md` | **DELETE** | Superseded by Section 15 |
-| `MVP_ENV_CHECKLIST.md` | **MERGE → MASTER** | Section 6 |
-| `CURSOR_FINAL_MASTER_PROMPT.md` | **DELETE** (or move to `.internal/`) | 2280-line build spec — not user-facing |
-| `projects.md` | **DELETE** (or move to `.internal/`) | Competitor research — not release doc |
-| `PROJECT_REALITY_CHECK.md` | **DELETE** | Historical deadline assessment |
-| `REPRODUCIBILITY_REPORT.md` | **MERGE → MASTER** | Section 19 |
-| `RUNTIME_VERIFICATION_MASTER_REPORT.md` | **MERGE → MASTER** | Section 14 |
-| `WINNING_BUILD_PLAN.md` | **DELETE** | Historical planning |
-| `WINNING_STRATEGY_REPORT.md` | **DELETE** (or archive) | 669-line audit — key items merged |
+### Why `.gitignore` did NOT hide the docs
 
-**Recommended post-review state:** `README.md` + `MASTER_RELEASE_DOCUMENT.md` + `DEMO_RUNBOOK.md` + `evidence/*.json` reports only.
+`.gitignore` only prevents **new untracked** files from being added. It does **not** remove files already committed. The previous push committed all report files. The correct fix per Phase 3 was **DELETE**, not gitignore.
+
+### Files kept on GitHub (3 docs only)
+
+| File | Role |
+|------|------|
+| `README.md` | Repo entry point |
+| `MASTER_RELEASE_DOCUMENT.md` | Single source of truth (this file) |
+| `DEMO_RUNBOOK.md` | Hackathon judge reproduction |
+
+All other root `*.md` reports were deleted; content merged into this document.
 
 ---
 
@@ -1093,6 +1075,167 @@ See `DEMO_RUNBOOK.md` for frozen commands. Summary:
 
 ---
 
+## 25. Vercel + Render deployment (copy-paste guide)
+
+> **I cannot paste your real secret values here** — they live in your local `.env`. Copy each value from your machine's `.env` into the dashboards below. Never commit `.env` or paste secrets in GitHub issues/chat.
+
+### Architecture reminder
+
+| Service | Platform | Notes |
+|---------|----------|-------|
+| `apps/web` | **Vercel** | Static SPA |
+| `apps/api` + workers + Telegram | **Render** | Node web service |
+| Postgres | **Supabase** | Already configured |
+| Redis | **Upstash** | BullMQ |
+| `apps/qvac-node` | **Your PC only** | Use ngrok/Tailscale URL for `QVAC_NODE_URL` |
+
+---
+
+### A. Deploy backend on Render
+
+1. Go to [render.com](https://render.com) → **New** → **Blueprint** (or Web Service)
+2. Connect GitHub repo: `mohamedwael201193/KINKEEPER`
+3. Render reads `render.yaml` at repo root
+4. Or manual settings:
+   - **Root Directory:** `.` (repo root)
+   - **Build Command:** `npm install && npm run build -w @kinkeeper/shared -w @kinkeeper/db -w @kinkeeper/qvac -w @kinkeeper/api`
+   - **Start Command:** `node apps/api/dist/main.js`
+   - **Health Check Path:** `/health`
+5. After deploy, note your URL: `https://kinkeeper-api.onrender.com` (example)
+
+#### Render environment variables
+
+Open **Render Dashboard → kinkeeper-api → Environment**. Add every row below.  
+**Value column:** open your local `d:\route\KINKEEPER\.env` and copy the matching value.
+
+| Key | Required | Copy from local `.env` | Production notes |
+|-----|----------|------------------------|------------------|
+| `NODE_ENV` | Yes | set to `production` | |
+| `APP_ENV` | Yes | set to `production` | |
+| `APP_PORT` | Yes | Render sets `PORT` automatically; also set `10000` or leave Render's `PORT` | `main.ts` uses `process.env.PORT` |
+| `DATABASE_URL` | Yes | `DATABASE_URL` | Supabase pooler :6543 |
+| `DATABASE_DIRECT_URL` | Yes | `DATABASE_DIRECT_URL` | Supabase direct :5432 |
+| `REDIS_URL` | Yes | `REDIS_URL` | Upstash TLS URL |
+| `PRIVY_APP_ID` | Yes | `PRIVY_APP_ID` | Same as local |
+| `PRIVY_APP_SECRET` | Yes | `PRIVY_APP_SECRET` | Same as local |
+| `JWT_PRIVATE_KEY` | Yes | Export PEM — see below | **Use inline PEM on Render, not file** |
+| `JWT_PUBLIC_KEY` | Yes | Export PEM — see below | **Use inline PEM on Render, not file** |
+| `JWT_ACCESS_EXPIRES_IN` | Yes | `JWT_ACCESS_EXPIRES_IN` | `15m` |
+| `JWT_REFRESH_EXPIRES_IN` | Yes | `JWT_REFRESH_EXPIRES_IN` | `30d` |
+| `APP_URL` | Yes | **Change** to Vercel URL | e.g. `https://kinkeeper.vercel.app` |
+| `API_URL` | Yes | **Change** to Render URL | e.g. `https://kinkeeper-api.onrender.com` |
+| `CORS_ORIGINS` | Yes | **Change** to Vercel URL | e.g. `https://kinkeeper.vercel.app` |
+| `QVAC_NODE_URL` | Yes | **Change** to tunnel URL | ngrok/Tailscale to your PC `:3001` |
+| `QVAC_NODE_SECRET` | Yes | `QVAC_NODE_SECRET` | Same on local QVAC node |
+| `EVIDENCE_DIR` | Yes | `/tmp/evidence` | Render ephemeral disk |
+| `UPLOAD_DIR` | Yes | `/tmp/uploads` | Render ephemeral disk |
+| `TELEGRAM_BOT_TOKEN` | If bot | `TELEGRAM_BOT_TOKEN` | |
+| `TELEGRAM_ENABLED` | If bot | `true` | |
+| `TELEGRAM_LINK_TOKEN_TTL_SEC` | Optional | `900` | |
+| `LOG_LEVEL` | Optional | `info` | |
+
+**JWT keys for Render (one-time export from your PC):**
+
+```powershell
+# Run in d:\route\KINKEEPER
+$priv = Get-Content .jwt-private.pem -Raw
+$pub = Get-Content .jwt-public.pem -Raw
+# Paste into Render as JWT_PRIVATE_KEY and JWT_PUBLIC_KEY (full PEM including BEGIN/END lines)
+# Or single-line with \n between lines
+```
+
+**Local QVAC node must stay running** on your PC during demo:
+
+```powershell
+npm run dev:qvac-node
+# Expose port 3001 via ngrok: ngrok http 3001
+# Set QVAC_NODE_URL=https://YOUR-NGROK-URL on Render
+```
+
+---
+
+### B. Deploy frontend on Vercel
+
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import `mohamedwael201193/KINKEEPER`
+3. Settings:
+
+| Setting | Value |
+|---------|-------|
+| **Framework Preset** | Vite |
+| **Root Directory** | `apps/web` |
+| **Build Command** | `npm run build` |
+| **Output Directory** | `dist` |
+| **Install Command** | `cd ../.. && npm install` |
+
+4. **Environment Variables** (Vercel → Settings → Environment Variables):
+
+| Key | Value | Where to copy |
+|-----|-------|---------------|
+| `VITE_PRIVY_APP_ID` | your Privy app ID | local `.env` → `VITE_PRIVY_APP_ID` |
+| `VITE_API_URL` | `https://YOUR-RENDER-URL.onrender.com` | **Not** `/api` — full Render API URL |
+
+5. Deploy → note URL e.g. `https://kinkeeper.vercel.app`
+
+6. **Go back to Render** and update:
+   - `APP_URL` = your Vercel URL
+   - `CORS_ORIGINS` = your Vercel URL
+
+7. **Privy dashboard** → add allowed domains:
+   - `https://kinkeeper.vercel.app`
+   - `http://localhost:5173` (dev)
+
+---
+
+### C. Local QVAC node env (your PC — not Vercel/Render)
+
+Keep running locally. Copy from your `.env`:
+
+| Key | Copy from `.env` |
+|-----|------------------|
+| `QVAC_NODE_PORT` | `3001` |
+| `QVAC_NODE_SECRET` | same as Render |
+| `QVAC_MODELS_CACHE_DIR` | `./.qvac-models` |
+| `QVAC_HYPERSWARM_SEED` | your seed |
+| `MEDPSY_MODEL` | `1.7B` |
+| `PRELOAD_MEDPSY` | `false` |
+| `EVIDENCE_DIR` | `./evidence` |
+
+---
+
+### D. Post-deploy verification
+
+```bash
+curl https://YOUR-RENDER-URL.onrender.com/health
+curl https://YOUR-RENDER-URL.onrender.com/public/proof
+```
+
+Open Vercel URL → Privy login → onboarding → Telegram link.
+
+**Without local QVAC node + tunnel:** dashboard works, but audio upload / Sentinel / Cognoscente will fail (`qvacNode: unhealthy`).
+
+---
+
+### E. Your local `.env` keys checklist
+
+These keys exist in your local `.env` — map each to Render or Vercel as above:
+
+```
+MEDPSY_MODEL, PRELOAD_MEDPSY, QVAC_MODELS_CACHE_DIR  → local QVAC only
+DATABASE_URL, DATABASE_DIRECT_URL                      → Render
+JWT_* (use PEM inline on Render)                        → Render
+NODE_ENV, APP_ENV, APP_PORT                             → Render
+APP_URL, API_URL, CORS_ORIGINS                          → Render (update for prod URLs)
+QVAC_NODE_URL, QVAC_NODE_SECRET, QVAC_HYPERSWARM_SEED    → local QVAC + Render (URL)
+EVIDENCE_DIR, REDIS_URL, UPLOAD_DIR                     → Render
+TELEGRAM_*                                              → Render
+PRIVY_APP_ID, PRIVY_APP_SECRET                          → Render
+VITE_PRIVY_APP_ID                                       → Vercel
+(+ add VITE_API_URL on Vercel — not in local .env yet)
+```
+
+---
+
 ## 24. Release readiness scores
 
 **Scoring date:** 2026-06-20 · **Method:** Code verification + automated gate runs + prior runtime reports
@@ -1101,9 +1244,9 @@ See `DEMO_RUNBOOK.md` for frozen commands. Summary:
 |----------|-------|-----------|
 | **Overall release readiness** | **68 / 100** | Core product works; gates and deploy artifacts incomplete |
 | **Security** | **72 / 100** | Good API middleware; no RLS; public proof endpoints; PAT exposure external |
-| **Deployment readiness** | **48 / 100** | No Dockerfile/render.yaml/vercel.json; QVAC topology documented but not wired |
-| **Documentation quality** | **55 / 100** | 26 fragmented docs; this master doc consolidates; README stale |
-| **Repository hygiene** | **42 / 100** | Local non-git workspace; redundant markdown; evidence/dist were not fully gitignored |
+| **Deployment readiness** | **72 / 100** | `render.yaml` + `vercel.json` added; env guide in §25 |
+| **Documentation quality** | **85 / 100** | Single master doc + README + DEMO_RUNBOOK only |
+| **Repository hygiene** | **78 / 100** | Redundant markdown removed; gitignore for artifacts |
 | **QVAC compliance** | **88 / 100** | Correct local-node separation; SDK 0.13.3; delegation optional |
 | **Hackathon readiness** | **82 / 100** | Strong demo path + proof artifacts; needs live QVAC for full wow |
 | **Production readiness** | **45 / 100** | No CI, no RLS, no deployment manifests, local QVAC coupling |

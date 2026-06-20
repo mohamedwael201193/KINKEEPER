@@ -16,6 +16,8 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string(),
   DATABASE_URL: z.string().min(1),
   DATABASE_DIRECT_URL: z.string().min(1),
+  JWT_PRIVATE_KEY: z.string().optional(),
+  JWT_PUBLIC_KEY: z.string().optional(),
   JWT_PRIVATE_KEY_FILE: z.string().default(".jwt-private.pem"),
   JWT_PUBLIC_KEY_FILE: z.string().default(".jwt-public.pem"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
@@ -47,6 +49,19 @@ function readKeyFile(path: string): string {
   return readFileSync(resolved, "utf8");
 }
 
+function readJwtKey(inline: string | undefined, filePath: string, label: string): string {
+  if (inline?.trim()) {
+    return inline.replace(/\\n/g, "\n");
+  }
+  try {
+    return readKeyFile(filePath);
+  } catch {
+    throw new Error(
+      `Missing ${label}. Set ${label} env var (Render/Vercel) or ${label}_FILE pointing to a PEM file.`,
+    );
+  }
+}
+
 export function loadEnv(): ApiEnv {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -55,8 +70,16 @@ export function loadEnv(): ApiEnv {
 
   return {
     ...parsed.data,
-    jwtPrivateKey: readKeyFile(parsed.data.JWT_PRIVATE_KEY_FILE),
-    jwtPublicKey: readKeyFile(parsed.data.JWT_PUBLIC_KEY_FILE),
+    jwtPrivateKey: readJwtKey(
+      parsed.data.JWT_PRIVATE_KEY,
+      parsed.data.JWT_PRIVATE_KEY_FILE,
+      "JWT_PRIVATE_KEY",
+    ),
+    jwtPublicKey: readJwtKey(
+      parsed.data.JWT_PUBLIC_KEY,
+      parsed.data.JWT_PUBLIC_KEY_FILE,
+      "JWT_PUBLIC_KEY",
+    ),
     corsOrigins: parsed.data.CORS_ORIGINS.split(",").map((origin) => origin.trim()),
   };
 }

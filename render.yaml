@@ -1,0 +1,21 @@
+# Render Blueprint — KINKEEPER API + workers + Telegram bot
+# QVAC node is NOT deployed here — run locally only (see MASTER_RELEASE_DOCUMENT.md)
+services:
+  - type: web
+    name: kinkeeper-api
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npm run build -w @kinkeeper/shared -w @kinkeeper/db -w @kinkeeper/qvac -w @kinkeeper/api
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: APP_PORT
+        value: "10000"
+      # Set all secrets in Render Dashboard → Environment (see MASTER_RELEASE_DOCUMENT.md §25)
