@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build -w @kinkeeper/shared && npm run build -w @kinkeeper/web",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

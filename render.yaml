@@ -4,7 +4,7 @@ services:
   - type: web
     name: kinkeeper-api
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: npm install && npm run build -w @kinkeeper/shared -w @kinkeeper/db -w @kinkeeper/qvac -w @kinkeeper/api
     startCommand: node apps/api/dist/main.js
