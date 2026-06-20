@@ -1,0 +1,409 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
+}
+
+enum FamilyRole {
+  admin
+  caregiver
+  viewer
+}
+
+enum DeviceRole {
+  cognition_node
+  elder_phone
+  caregiver_phone
+  archive_node
+}
+
+enum DeviceStatus {
+  online
+  sleeping
+  offline
+}
+
+enum AgentStatus {
+  active
+  paused
+  error
+}
+
+enum AlertSeverity {
+  critical
+  warning
+  info
+}
+
+enum AgentType {
+  sentinel
+  cognoscente
+  chronicler
+  coordinator
+  archivist
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String?   @map("password_hash")
+  privyDid        String?   @unique @map("privy_did")
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  refreshTokens  RefreshToken[]
+  familyMembers  FamilyMember[]
+  auditLogs      AuditLog[]
+  telegramLinks  TelegramLink[]
+  telegramChat   TelegramChat?
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Family {
+  id             String   @id @default(cuid())
+  name           String
+  meshPublicKey  String?  @map("mesh_public_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  members         FamilyMember[]
+  elders          Elder[]
+  devices         Device[]
+  agents          Agent[]
+  agentLogs       AgentLog[]
+  alerts          Alert[]
+  decisionBundles DecisionBundle[]
+  inferenceLogs   InferenceLog[]
+  auditLogs       AuditLog[]
+  reasoningTraces MemoryReasoningTrace[]
+  evidencePackets EvidencePacket[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id        String     @id @default(cuid())
+  familyId  String     @map("family_id")
+  userId    String     @map("user_id")
+  role      FamilyRole @default(caregiver)
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId])
+  @@map("family_members")
+}
+
+model Elder {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  firstName String   @map("first_name")
+  lastName  String   @map("last_name")
+  birthYear Int      @map("birth_year")
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family    Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  alerts    Alert[]
+  checkIns  CognoscenteCheckIn[]
+  baselines CognoscenteBaseline[]
+  trends    CognoscenteTrend[]
+
+  @@index([familyId])
+  @@map("elders")
+}
+
+model Device {
+  id              String       @id @default(cuid())
+  familyId        String       @map("family_id")
+  name            String
+  role            DeviceRole
+  hardwareModel   String?      @map("hardware_model")
+  os              String?
+  meshPublicKey   String?      @map("mesh_public_key")
+  status          DeviceStatus @default(offline)
+  lastSeenAt      DateTime?    @map("last_seen_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  family        Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  inferenceLogs InferenceLog[]
+
+  @@index([familyId])
+  @@map("devices")
+}
+
+model Agent {
+  id        String      @id @default(cuid())
+  familyId  String      @map("family_id")
+  name      AgentType
+  status    AgentStatus @default(active)
+  config    Json        @default("{}")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, name])
+  @@map("agents")
+}
+
+model AgentLog {
+  id        String    @id @default(cuid())
+  familyId  String    @map("family_id")
+  agent     AgentType
+  level     String
+  message   String
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("agent_logs")
+}
+
+model Alert {
+  id         String        @id @default(cuid())
+  familyId   String        @map("family_id")
+  elderId    String?       @map("elder_id")
+  agent      AgentType
+  severity   AlertSeverity
+  type       String
+  title      String
+  summary    String
+  metadata   Json?
+  bundleId   String?       @map("bundle_id")
+  resolved   Boolean       @default(false)
+  resolvedAt DateTime?     @map("resolved_at")
+  resolvedBy String?       @map("resolved_by")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  elder  Elder? @relation(fields: [elderId], references: [id], onDelete: SetNull)
+  bundle         DecisionBundle? @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  evidencePacket EvidencePacket?
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("alerts")
+}
+
+model TelegramLink {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("telegram_links")
+}
+
+model TelegramChat {
+  id       String   @id @default(cuid())
+  userId   String   @unique @map("user_id")
+  chatId   String   @unique @map("chat_id")
+  linkedAt DateTime @default(now()) @map("linked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_chats")
+}
+
+model EvidencePacket {
+  id          String   @id @default(cuid())
+  familyId    String   @map("family_id")
+  alertId     String   @unique @map("alert_id")
+  bundleId    String   @map("bundle_id")
+  format      String   @default("json")
+  filePath    String   @map("file_path")
+  contentHash String   @map("content_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  alert  Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("evidence_packets")
+}
+
+model DecisionBundle {
+  id           String    @id @default(cuid())
+  familyId     String    @map("family_id")
+  agent        AgentType
+  trigger      String
+  inputs       Json
+  reasoning    Json
+  delegation   Json?
+  toolCalls    Json      @map("tool_calls")
+  action       String
+  device       String
+  hash         String
+  previousHash String    @map("previous_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  family Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  alerts Alert[]
+
+  @@unique([hash])
+  @@index([familyId, createdAt(sort: Desc)])
+  @@index([agent, createdAt(sort: Desc)])
+  @@map("decision_bundles")
+}
+
+model CognoscenteCheckIn {
+  id                   String   @id @default(cuid())
+  elderId              String   @map("elder_id")
+  audioPath            String   @map("audio_path")
+  transcript           String?
+  wordFindingLatencySec Float?  @map("word_finding_latency_sec")
+  semanticDrift        Float?   @map("semantic_drift")
+  repetition           Int?
+  sentiment            Float?
+  compositeDeviation   Float?   @map("composite_deviation")
+  alertTriggered       Boolean  @default(false) @map("alert_triggered")
+  bundleId             String?  @map("bundle_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  elder Elder @relation(fields: [elderId], references: [id], onDelete: Cascade)
+
+  @@index([elderId, createdAt(sort: Desc)])
+  @@map("cognoscente_check_ins")
+}
+
+model CognoscenteBaseline {
+  id           String   @id @default(cuid())
+  elderId      String   @map("elder_id")
+  metric       String
+  baselineValue Float   @map("baseline_value")
+  stddev       Float
+  sampleCount  Int      @map("sample_count")
+  computedAt   DateTime @default(now()) @map("computed_at")
+
+  elder Elder @relation(fields: [elderId], references: [id], onDelete: Cascade)
+
+  @@unique([elderId, metric])
+  @@map("cognoscente_baselines")
+}
+
+model CognoscenteTrend {
+  id                   String   @id @default(cuid())
+  elderId              String   @map("elder_id")
+  date                 DateTime @db.Date
+  wordFindingLatencySec Float?  @map("word_finding_latency_sec")
+  semanticDrift        Float?   @map("semantic_drift")
+  repetition           Int?
+  sentiment            Float?
+  compositeDeviation   Float?   @map("composite_deviation")
+  alertTriggered       Boolean  @default(false) @map("alert_triggered")
+
+  elder Elder @relation(fields: [elderId], references: [id], onDelete: Cascade)
+
+  @@unique([elderId, date])
+  @@map("cognoscente_trends")
+}
+
+model MemoryReasoningTrace {
+  id           String    @id @default(cuid())
+  familyId     String    @map("family_id")
+  agent        AgentType
+  bundleId     String?   @map("bundle_id")
+  thinkingText String    @map("thinking_text")
+  rawDeltas    Json?     @map("raw_deltas")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("memory_reasoning_traces")
+}
+
+model InferenceLog {
+  id                   String   @id @default(cuid())
+  familyId             String?  @map("family_id")
+  deviceId             String?  @map("device_id")
+  timestamp            DateTime @default(now())
+  modelSrc             String   @map("model_src")
+  operation            String
+  promptTokens         Int      @default(0) @map("prompt_tokens")
+  completionTokens     Int      @default(0) @map("completion_tokens")
+  ttftSec              Float?   @map("ttft_sec")
+  tps                  Float?
+  delegateProvider     String?  @map("delegate_provider")
+  delegateFallbackUsed Boolean  @default(false) @map("delegate_fallback_used")
+  bundleId             String?  @map("bundle_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([familyId, timestamp(sort: Desc)])
+  @@map("inference_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  familyId   String?  @map("family_id")
+  userId     String?  @map("user_id")
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model SentinelCallRecording {
+  id                    String   @id @default(cuid())
+  familyId              String   @map("family_id")
+  elderId               String   @map("elder_id")
+  audioPath             String   @map("audio_path")
+  transcript            String?
+  initialClassification String?  @map("initial_classification")
+  initialConfidence     Float?   @map("initial_confidence")
+  initialReasoning      String?  @map("initial_reasoning")
+  finalClassification   String?  @map("final_classification")
+  finalConfidence       Float?   @map("final_confidence")
+  bundleId              String?  @map("bundle_id")
+  status                String   @default("pending")
+  createdAt             DateTime @default(now()) @map("created_at")
+  processedAt           DateTime? @map("processed_at")
+
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("sentinel_call_recordings")
+}
