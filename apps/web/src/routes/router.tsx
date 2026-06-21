@@ -1,17 +1,19 @@
-import { createRootRoute, createRoute, createRouter, Navigate, Outlet } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+} from "@tanstack/react-router";
 import LandingPage from "@/site/pages/landing-page";
-import DocsPage from "@/site/pages/docs-page";
-import DownloadPage from "@/site/pages/download-page";
 import ArchitecturePage from "@/site/pages/architecture-page";
-import DemoPage from "@/site/pages/demo-page";
-import QvacProofPage from "@/site/pages/qvac-proof-page";
-
-function RootLayout() {
-  return <Outlet />;
-}
+import SecurityPage from "@/site/pages/security-page";
+import FaqPage from "@/site/pages/faq-page";
+import InstallPage, { DemoPage, DownloadPage } from "@/site/pages/product-pages";
+import { DocsLayout, DocsHomePage } from "@/site/pages/docs/docs-layout";
+import { DocArticlePage } from "@/site/pages/docs/doc-articles";
 
 const rootRoute = createRootRoute({
-  component: RootLayout,
+  component: Outlet,
 });
 
 const indexRoute = createRoute({
@@ -23,13 +25,28 @@ const indexRoute = createRoute({
 const docsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/docs",
-  component: DocsPage,
+  component: DocsLayout,
 });
 
-const downloadRoute = createRoute({
+const docsIndexRoute = createRoute({
+  getParentRoute: () => docsRoute,
+  path: "/",
+  component: DocsHomePage,
+});
+
+const docsSlugRoute = createRoute({
+  getParentRoute: () => docsRoute,
+  path: "/$slug",
+  component: function DocsSlug() {
+    const { slug } = docsSlugRoute.useParams();
+    return <DocArticlePage slug={slug} />;
+  },
+});
+
+const installRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/download",
-  component: DownloadPage,
+  path: "/install",
+  component: InstallPage,
 });
 
 const architectureRoute = createRoute({
@@ -44,45 +61,36 @@ const demoRoute = createRoute({
   component: DemoPage,
 });
 
-const qvacProofRoute = createRoute({
+const securityRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/qvac-proof",
-  component: QvacProofPage,
+  path: "/security",
+  component: SecurityPage,
 });
 
-const legacyRedirect = (to: string) =>
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: to,
-    component: () => <Navigate to="/" />,
-  });
+const downloadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/download",
+  component: DownloadPage,
+});
+
+const faqRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/faq",
+  component: FaqPage,
+});
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  docsRoute,
-  downloadRoute,
+  docsRoute.addChildren([docsIndexRoute, docsSlugRoute]),
+  installRoute,
   architectureRoute,
   demoRoute,
-  qvacProofRoute,
-  legacyRedirect("/login"),
-  legacyRedirect("/register"),
-  legacyRedirect("/auth/complete"),
-  legacyRedirect("/onboarding/family"),
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/app/$",
-    component: () => <Navigate to="/docs" />,
-  }),
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/app",
-    component: () => <Navigate to="/docs" />,
-  }),
+  securityRoute,
+  downloadRoute,
+  faqRoute,
 ]);
 
-export const router = createRouter({
-  routeTree,
-});
+export const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {
   interface Register {
