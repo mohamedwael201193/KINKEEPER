@@ -4,7 +4,7 @@
 
 @layer base {
   * {
-    @apply border-ink/10;
+    @apply border-white/10;
   }
 
   html {
@@ -12,10 +12,10 @@
   }
 
   body {
-    @apply bg-canvas font-sans text-ink antialiased;
+    @apply bg-zinc-950 font-sans text-zinc-100 antialiased;
   }
 
   ::selection {
-    @apply bg-accent/20 text-ink;
+    @apply bg-violet-500/30 text-white;
   }
 }

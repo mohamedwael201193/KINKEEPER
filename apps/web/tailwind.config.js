@@ -6,42 +6,34 @@ export default {
     extend: {
       colors: {
         canvas: {
-          DEFAULT: "#F2F0EA",
-          muted: "#E6E0DB",
-          dark: "#1A1A1A",
+          DEFAULT: "#09090b",
+          muted: "#18181b",
+          dark: "#050508",
         },
         accent: {
-          DEFAULT: "#9478FC",
-          muted: "#B8A4FD",
-          soft: "rgba(148, 120, 252, 0.12)",
+          DEFAULT: "#7c3aed",
+          muted: "#a78bfa",
+          soft: "rgba(124, 58, 237, 0.15)",
         },
         ink: {
-          DEFAULT: "#1A1A1A",
-          muted: "#5C5C5C",
-          faint: "#8A8A8A",
+          DEFAULT: "#fafafa",
+          muted: "#a1a1aa",
+          faint: "#71717a",
         },
         trust: {
-          ok: "#2D6A4F",
-          warn: "#B7791F",
-          critical: "#9B2C2C",
+          ok: "#34d399",
+          warn: "#fbbf24",
+          critical: "#f87171",
         },
       },
       fontFamily: {
         serif: ['"Instrument Serif"', "Georgia", "serif"],
         sans: ['"Inter"', "system-ui", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       boxShadow: {
-        soft: "0 1px 2px rgba(26, 26, 26, 0.04), 0 8px 24px rgba(26, 26, 26, 0.06)",
-        card: "0 2px 8px rgba(26, 26, 26, 0.05), 0 16px 40px rgba(26, 26, 26, 0.08)",
-      },
-      animation: {
-        "fade-up": "fadeUp 0.6s ease-out forwards",
-      },
-      keyframes: {
-        fadeUp: {
-          "0%": { opacity: "0", transform: "translateY(16px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
+        soft: "0 8px 32px rgba(0, 0, 0, 0.35)",
+        card: "0 16px 48px rgba(0, 0, 0, 0.45)",
       },
     },
   },

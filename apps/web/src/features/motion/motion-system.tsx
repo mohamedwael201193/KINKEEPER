@@ -79,10 +79,10 @@ export function PipelineNode({
       }}
       className={`rounded-2xl border px-4 py-3 text-center text-sm font-medium ${
         done
-          ? "border-trust-ok/30 bg-trust-ok/10 text-trust-ok"
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
           : active
-            ? "border-accent bg-accent-soft text-accent shadow-soft"
-            : "border-ink/10 bg-white/60 text-ink-muted"
+            ? "border-violet-500/40 bg-violet-500/15 text-violet-100 shadow-soft"
+            : "border-white/10 bg-white/[0.03] text-zinc-500"
       }`}
     >
       {label}
@@ -118,14 +118,14 @@ export function ChainLink({
           className="absolute -top-6 left-6 h-6 w-px origin-top bg-accent/40"
         />
       ) : null}
-      <div className="flex gap-4 rounded-2xl border border-ink/10 bg-white/80 p-4 shadow-soft backdrop-blur">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-ink text-canvas font-serif text-lg">
+      <div className="flex gap-4 rounded-2xl border border-white/10 bg-zinc-900/80 p-4 shadow-soft backdrop-blur">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600/20 font-serif text-lg text-violet-200 ring-1 ring-violet-500/30">
           {index + 1}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-wider text-accent">{agent}</p>
-          <p className="mt-1 break-all font-mono text-xs text-ink">{hash}</p>
-          <p className="mt-1 break-all font-mono text-[10px] text-ink-faint">prev {previousHash}</p>
+          <p className="text-xs uppercase tracking-wider text-violet-300">{agent}</p>
+          <p className="mt-1 break-all font-mono text-xs text-zinc-200">{hash}</p>
+          <p className="mt-1 break-all font-mono text-[10px] text-zinc-600">prev {previousHash}</p>
         </div>
       </div>
     </motion.div>
