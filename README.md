@@ -10,14 +10,26 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-14%20unit%20%7C%201%20integration-brightgreen" alt="Tests" />
-  <img src="https://img.shields.io/badge/guardian%20scenarios-A--H%2BW%20PASS-brightgreen" alt="Scenarios" />
-  <img src="https://img.shields.io/badge/demo-localhost%3A8787-blue" alt="Demo" />
+  <img src="https://img.shields.io/badge/guardian%3Averify-PASS-brightgreen" alt="guardian verify" />
+  <img src="https://img.shields.io/badge/guardian%3Ascenarios-PASS-brightgreen" alt="guardian scenarios" />
+  <img src="https://img.shields.io/badge/guardian%3Atelegram-PASS-brightgreen" alt="guardian telegram" />
 </p>
 
 ---
 
-## The moment that matters
+## Contents
+
+| Section | For |
+|---|---|
+| [Why Guardian Mesh exists](#why-guardian-mesh-exists) | Human story |
+| [Why this must run locally](#why-this-must-run-locally) | Privacy rationale |
+| [Why QVAC](#why-qvac) | Local stack depth |
+| [Demo](#demo) | Judge flow + what to observe |
+| [Proof of execution](#proof-of-execution) | `guardian:*` PASS commands |
+| [Judge guide](#judge-guide) | Fastest Windows path |
+| [Installation](#installation) | Clone → run |
+
+---
 
 Your parent answers the phone. A calm voice says they are from the IRS, Social Security is suspended, and gift cards must be paid today. Or a letter arrives demanding an urgent wire transfer. Or a message says a grandchild is in jail.
 
@@ -41,6 +53,93 @@ For a non-technical reader:
 6. **The family is notified** — optional Telegram alert with one-tap acknowledge.
 
 Nothing in this demo path requires sending voice, images, or transcripts to a remote AI service.
+
+---
+
+## Why Guardian Mesh exists
+
+Margaret is 78. She lives alone most of the day. Her son Ben works full time two states away.
+
+One afternoon the phone rings. A caller claims to be from the IRS. Margaret’s Social Security number has been “suspended.” Payment must be made today — in gift cards — or police will come to her door. She is frightened. She is alone. No one is on the line who knows her family’s safety rules.
+
+The next week, a letter arrives that looks like a bank notice. Urgent wire transfer. Official logo. Fine print designed to rush her.
+
+Ben cannot listen to every call. Carrier spam filters catch robocalls, not a calm impersonator on a long conversation. Cloud dashboards often see the problem **after** someone has already read a number aloud or photographed a document and sent it somewhere it should not go.
+
+Guardian Mesh is built for that gap: a **local AI safety layer** on the family’s machine that listens and reads **before** panic turns into payment — then tells Ben, with evidence he can trust, what happened and what to do next.
+
+The demo persona **Margaret** is configured in code (`GUARDIAN_ELDER_NAME` in `packages/guardian-mesh/src/config.ts`). The scenarios are synthetic test assets; the pipeline and verdicts are real QVAC inference.
+
+---
+
+## Why this must run locally
+
+| Data type | Why it is sensitive | Why cloud-first is insufficient |
+|---|---|---|
+| **Voice recordings** | Private conversations, health cues, fear in the caller’s tone | Uploading audio to a remote API expands breach surface and delay |
+| **Medical context** | Pharmacy receipts, appointment language | Family health details should not become a vendor’s training log |
+| **Family safety notes** | “Call Ben before wiring money” | RAG context is family-specific — belongs on-device |
+| **Invoices and letters** | Account numbers, names, amounts | OCR text can contain PII; local processing keeps it in the household |
+
+Scam detection is most useful **at the moment of decision** — while the elder still has the letter in hand or the caller on the line — not after a file has crossed the internet to a third-party model.
+
+Guardian Mesh binds inference to **localhost** (`127.0.0.1:8787`). The judge demo path does not call a remote LLM API. Optional Telegram delivery sends a **summary alert** to a caregiver; it is not required for the core pipeline to run.
+
+> **Important:** First run downloads QVAC models from the network (~2–4 GB). After cache, core inference can run offline. Telegram requires internet when enabled.
+
+---
+
+## Why QVAC
+
+Many projects treat “AI” as a remote HTTP call. Guardian Mesh does not work that way.
+
+Without [QVAC](https://qvac.tether.io/), this product would **not exist** as shipped:
+
+| If QVAC were removed | What breaks |
+|---|---|
+| No local STT | Scam **calls** cannot be transcribed on-device |
+| No local OCR | Fake **invoices** stay unread by the pipeline |
+| No embeddings + RAG | Family safety patterns are not retrieved at decision time |
+| No local LLM + MedPsy | Risk reasoning falls back to heuristics or cloud — neither is this demo |
+| No local TTS | WARN/BLOCK incidents lose the spoken warning path |
+| No profiler / provider proof | Judges cannot verify **which** local stack ran |
+
+QVAC is **core infrastructure**, not a badge. Every scenario button in the Judge Console runs the same in-process stack verified by `npm run guardian:verify` and `npm run guardian:scenarios`.
+
+---
+
+## One story, multiple threats
+
+Guardian Mesh is one narrative — **protect Margaret** — expressed against many attack shapes:
+
+```mermaid
+flowchart TB
+  subgraph Threats["Threats covered"]
+    T1[Scam calls]
+    T2[Fake invoices]
+    T3[Social engineering]
+  end
+  subgraph Mesh["One local pipeline"]
+    P[STT / OCR → RAG → Risk → Evidence]
+  end
+  subgraph Outcomes["Outcomes"]
+    O1[ALLOW / WARN / BLOCK]
+    O2[Hash-linked proof]
+    O3[Telegram caregiver alert]
+  end
+  T1 & T2 & T3 --> P --> O1 & O2 & O3
+```
+
+| Capability | Point solution | Guardian Mesh |
+|---|---|---|
+| Phone scam | Often separate app | Scenario A — STT → **BLOCK** |
+| Document fraud | Often separate scanner | Scenario B — OCR → **BLOCK** |
+| Ambiguous contact | Often ignored | Scenario W — **WARN** |
+| Safe daily life | False positives hurt trust | Scenario G — **ALLOW** |
+| Caregiver loop | Email, manual | Optional Telegram + **Acknowledge** |
+| Audit trail | Screenshots | SHA-256 chain + evidence packets |
+
+One platform. One evidence model. One judge flow under three minutes.
 
 ---
 
@@ -86,25 +185,6 @@ flowchart LR
 
 ---
 
-## Live product screenshots
-
-Screenshots are optional local assets under `docs/screenshots/` (not committed).
-
-| Screenshot | Description |
-|---|---|
-| ![Judge Console](docs/screenshots/dashboard.png) | Judge Console — scenario grid and status |
-| ![BLOCK scam call](docs/screenshots/block-scam-call.png) | Scenario A — IRS scam call → **BLOCK** |
-| ![Fake invoice](docs/screenshots/fake-invoice.png) | Scenario B — OCR invoice → **BLOCK** |
-| ![ALLOW check-in](docs/screenshots/allow-checkin.png) | Scenario G — safe check-in → **ALLOW** |
-| ![WARN scenario](docs/screenshots/warn-scenario.png) | Scenario W — utility verify → **WARN** |
-| ![QVAC Proof](docs/screenshots/proof-center.png) | QVAC Proof Center panel |
-| ![Telegram](docs/screenshots/telegram-alert.png) | Caregiver Telegram alert |
-| ![Evidence chain](docs/screenshots/evidence-chain.png) | Verify Chain — VALID |
-
-> Add PNGs locally under `docs/screenshots/` if you want images in this README.
-
----
-
 ## Product walkthrough
 
 ### Caregiver journey
@@ -136,7 +216,54 @@ sequenceDiagram
 3. Click **▶ 3-Min Judge Demo**
 4. Click **Verify Chain** and **Refresh QVAC Proof**
 
-Full steps are in the **Judge guide** section below.
+---
+
+## Demo
+
+### Demo video
+
+> **Status:** No demo video is hosted in this repository yet. Record from the Judge Console after models are cached.
+
+Recommended capture: **▶ 3-Min Judge Demo** → **Verify Chain** → **Refresh QVAC Proof** → optional Telegram **Acknowledge** tap.
+
+### Quick judge flow
+
+| Step | Action | Time (cached models) |
+|---:|---|---|
+| 1 | Double-click `release/GuardianMesh-Judge/Start-Guardian-Mesh.bat` | ~30s startup |
+| 2 | Open `http://127.0.0.1:8787/` | — |
+| 3 | Click **▶ 3-Min Judge Demo** | ~1–2 min |
+| 4 | Click **Verify Chain** | seconds |
+| 5 | Click **Refresh QVAC Proof** | seconds |
+
+### Expected results
+
+| Scenario | Verdict | Proves |
+|---|---|---|
+| A — IRS call | **BLOCK** | Local STT + scam rules |
+| B — Fake invoice | **BLOCK** | Local OCR |
+| G — Safe check-in | **ALLOW** | Low false-positive path |
+| W — Utility verify | **WARN** | Ambiguous tier |
+
+Automated matrix: `npm run guardian:scenarios` → `mismatches: []` in `evidence/guardian-scenarios/scenario-results.json`.
+
+### What judges should observe
+
+- Pipeline stages populate in the UI (STT/OCR → RAG → risk → evidence)
+- QVAC Proof Center shows **provider public key** and model identifiers
+- **Verify Chain** reports `VALID` with bundle count greater than zero
+- Verdict colors: red **BLOCK**, amber **WARN**, green **ALLOW**
+
+### What makes the demo real
+
+| Claim | Proof |
+|---|---|
+| Real QVAC inference | Models loaded via `@qvac/sdk` in-process — not mocked JSON |
+| Real evidence chain | `verifyChain()` + SHA-256 bundles in `LocalArchivist` |
+| Real Telegram path | Alert send + optional **Acknowledge** (`npm run guardian:telegram` → `ackReceived: true`) |
+| Real tier outcomes | Nine scenarios A–H + W with expected verdict checks |
+
+> **Warning:** Demo audio/images are **synthetic** (`npm run guardian:assets`). Inference on them is real; they are not recordings from a live elder.
 
 ---
 
@@ -244,7 +371,7 @@ Config: `config/default/default.config.json` · Models registry: `packages/qvac/
 
 ## Judge guide
 
-> **Start here:** Judge guide section below.
+> **Start here:** `release/GuardianMesh-Judge/Start-Guardian-Mesh.bat` → **▶ 3-Min Judge Demo**
 
 ### Fastest path (Windows)
 
@@ -272,43 +399,59 @@ Verified in `evidence/guardian-scenarios/scenario-results.json` — **`mismatche
 
 ---
 
-## Verification
+## Proof of execution
 
-All commands below were executed successfully during README audit (**2026-06-21**).
+> **Reproducible gates.** Run these from the repository root after `npm install`, `.env` setup, and QVAC model cache. Evidence JSON is written locally under `evidence/` (gitignored).
 
-### Quality gates
+These commands were run successfully against this codebase.
 
-```powershell
-npm run lint          # PASS — ESLint clean
-npm run typecheck     # PASS — all workspaces
-npm run test:unit     # PASS — 14 tests
-npm run test:integration  # PASS — 1 test
-```
+| Command | Result | What it proves |
+|---|---|---|
+| `npm run guardian:verify` | **PASS** | Audio → **BLOCK**, OCR → **BLOCK**, hash chain **valid**, provider key emitted |
+| `npm run guardian:scenarios` | **PASS** | Scenarios A–H + W match expected ALLOW/WARN/BLOCK — `mismatches: []` |
+| `npm run guardian:telegram` | **PASS** | Alert delivered; caregiver **Acknowledge** recorded (`ackReceived: true`) |
 
-### Guardian Mesh gates
+### `guardian:verify`
 
-```powershell
-npm run guardian:fresh      # PASS — evidence/fresh-machine-validation.json
-npm run guardian:verify     # PASS — evidence/guardian-mesh-verify.json
-npm run guardian:scenarios  # PASS — evidence/guardian-scenarios/scenario-results.json
-npm run guardian:telegram   # PASS (prior run) — evidence/telegram-verify.json, ackReceived: true
-```
-
-### Sample verified outputs
-
-**`guardian:verify`** — audio BLOCK, OCR BLOCK, chain valid:
+Writes `evidence/guardian-mesh-verify.json`. Latest verified output includes:
 
 ```json
 {
   "audio": { "verdict": "BLOCK", "telegramSent": true },
   "ocr": { "verdict": "BLOCK" },
-  "chain": { "valid": true, "count": 6, "errors": [] }
+  "chain": { "valid": true, "errors": [] }
 }
 ```
 
-**`guardian:scenarios`** — zero mismatches across A–H + W.
+Proves: full STT + OCR pipeline, evidence chain integrity, optional Telegram send.
 
-**Ship audit score:** 9.8/10 (local verification scripts in `scripts/`).
+### `guardian:scenarios`
+
+Writes `evidence/guardian-scenarios/scenario-results.json` with **`mismatches: []`**.
+
+Proves: nine threat/safe scenarios behave as documented (BLOCK / WARN / ALLOW tiers).
+
+### `guardian:telegram`
+
+Writes `evidence/telegram-verify.json`. Verified run includes `"ackReceived": true`.
+
+Proves: caregiver alert delivery and acknowledge callback path (requires `TELEGRAM_BOT_TOKEN` + chat ID in `.env`).
+
+---
+
+## Verification
+
+Additional quality gates executed during README hardening:
+
+```powershell
+npm run lint              # PASS — ESLint clean
+npm run typecheck         # PASS — all workspaces
+npm run test:unit         # PASS — 14 tests
+npm run test:integration  # PASS — 1 test
+npm run guardian:fresh    # PASS — build + launcher artifacts present
+```
+
+> Evidence JSON files live under `evidence/` locally (gitignored). They are produced by the commands above, not shipped in the repo.
 
 ---
 
@@ -528,8 +671,8 @@ Only items with honest status:
 | Telegram alert + ack E2E | **Shipped** (see `evidence/telegram-verify.json`) |
 | Prompt injection hardening + tests | **Shipped** |
 | 3-Min Judge Demo UI | **Shipped** |
-| Windows Electron portable + NSIS installer | **Shipped** (unsigned) |
-| README screenshots | **Not implemented** — placeholders only |
+| Windows Electron portable + NSIS installer | **Shipped** (unsigned; rebuild locally — not in git) |
+| Demo video in repository | **Not implemented** |
 | Windows code signing | **Not implemented** |
 | macOS / Linux Electron builds | **Not implemented** |
 | Mobile caregiver app | **Not implemented** |
