@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Download, ExternalLink, Monitor, Terminal } from "lucide-react";
+import { ExternalLink, Monitor, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodeBlock } from "@/site/components/code-block";

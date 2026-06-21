@@ -25,6 +25,10 @@ export interface PipelineStageResult {
   detail?: string;
 }
 
+export interface PipelineHooks {
+  onStage?: (stage: PipelineStageResult) => void;
+}
+
 export interface GuardianIncidentResult {
   incidentId: string;
   inputType: "audio" | "image" | "document";

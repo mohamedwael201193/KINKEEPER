@@ -1,26 +1,33 @@
-import { useEffect, useState } from "react";
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion, useInView, useMotionValue, useSpring } from "framer-motion";
+
+function formatStatValue(value: string, v: number, prefix: string, suffix: string): string {
+  if (value.includes("B")) return `${prefix}${v.toFixed(1)}${suffix}`;
+  if (value.includes("K")) return `${Math.round(v)}${suffix}`;
+  return `${prefix}${Math.round(v)}${suffix}`;
+}
 
 export function AnimatedStat({ value, label }: { value: string; label: string }) {
   const numeric = parseFloat(value.replace(/[^0-9.]/g, ""));
   const prefix = value.startsWith("$") ? "$" : "";
   const suffix = value.includes("B") ? "B+" : value.includes("K") ? "K+" : value.includes("%") ? "%" : "+";
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(containerRef, { once: true, margin: "-10% 0px" });
   const motionVal = useMotionValue(0);
   const spring = useSpring(motionVal, { stiffness: 60, damping: 18 });
-  const [display, setDisplay] = useState("0");
+  const [display, setDisplay] = useState(() => formatStatValue(value, numeric, prefix, suffix));
 
   useEffect(() => {
+    if (!inView) return;
+    const format = (v: number) => formatStatValue(value, v, prefix, suffix);
+    const unsub = spring.on("change", (v) => setDisplay(format(v)));
+    motionVal.set(0);
     motionVal.set(numeric);
-    const unsub = spring.on("change", (v) => {
-      if (value.includes("B")) setDisplay(`${prefix}${v.toFixed(1)}${suffix}`);
-      else if (value.includes("K")) setDisplay(`${Math.round(v)}${suffix}`);
-      else setDisplay(`${prefix}${Math.round(v)}${suffix}`);
-    });
     return unsub;
-  }, [motionVal, numeric, prefix, spring, suffix, value]);
+  }, [inView, motionVal, numeric, prefix, spring, suffix, value]);
 
   return (
-    <div>
+    <div ref={containerRef}>
       <motion.p className="font-serif text-4xl text-accent md:text-5xl" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }}>
         {display}
       </motion.p>

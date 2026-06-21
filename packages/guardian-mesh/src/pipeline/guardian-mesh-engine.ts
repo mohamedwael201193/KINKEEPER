@@ -13,7 +13,7 @@ import { hashFileContents, writeEvidencePacket } from "../evidence/packet-writer
 import { writePcmAsWav } from "../evidence/wav-writer.js";
 import { FamilyRagService } from "../rag/family-rag.js";
 import { GuardianTelegramNotifier } from "../telegram/notifier.js";
-import type { GuardianIncidentResult, PipelineStageResult } from "../types.js";
+import type { GuardianIncidentResult, PipelineHooks, PipelineStageResult } from "../types.js";
 import { RiskAnalyzer } from "./risk-analyzer.js";
 
 export class GuardianMeshEngine {
@@ -35,6 +35,8 @@ export class GuardianMeshEngine {
       config.telegramBotToken,
       config.telegramChatId,
       config.appUrl,
+      config.evidenceDir,
+      config.elderName,
     );
   }
 
@@ -63,9 +65,13 @@ export class GuardianMeshEngine {
     this.preloaded = true;
   }
 
-  async processAudio(audioPath: string): Promise<GuardianIncidentResult> {
+  async processAudio(audioPath: string, hooks?: PipelineHooks): Promise<GuardianIncidentResult> {
     await this.preload();
     const stages: PipelineStageResult[] = [];
+    const pushStage = (stage: PipelineStageResult) => {
+      stages.push(stage);
+      hooks?.onStage?.(stage);
+    };
     const incidentId = randomUUID();
     const inputBuffer = readFileSync(audioPath);
     const inputHash = hashFileContents(inputBuffer);
@@ -73,7 +79,7 @@ export class GuardianMeshEngine {
     const t0 = performance.now();
     const transcribed = await this.qvac.runTranscribe({ audioPath });
     this.modelVersions[transcribed.modelSrc] = transcribed.modelId;
-    stages.push({
+    pushStage({
       stage: "stt",
       status: "complete",
       latencyMs: Math.round(performance.now() - t0),
@@ -82,7 +88,7 @@ export class GuardianMeshEngine {
 
     const t1 = performance.now();
     const ragHits = await this.rag.searchContext(transcribed.text);
-    stages.push({
+    pushStage({
       stage: "rag",
       status: "complete",
       latencyMs: Math.round(performance.now() - t1),
@@ -92,7 +98,7 @@ export class GuardianMeshEngine {
     const t2 = performance.now();
     const risk = await this.risk.analyze({ content: transcribed.text, ragContext: ragHits });
     this.modelVersions[risk.modelUsed] = risk.modelUsed;
-    stages.push({
+    pushStage({
       stage: "risk",
       status: "complete",
       latencyMs: Math.round(performance.now() - t2),
@@ -117,7 +123,7 @@ export class GuardianMeshEngine {
       action: risk.verdict === "BLOCK" ? "block_and_alert" : "review_and_alert",
       device: "guardian-mesh-local",
     });
-    stages.push({ stage: "evidence_bundle", status: "complete", latencyMs: 0, detail: bundle.hash.slice(0, 12) });
+    pushStage({ stage: "evidence_bundle", status: "complete", latencyMs: 0, detail: bundle.hash.slice(0, 12) });
 
     const chain = this.archivist.verifyChain();
     const { packetPath } = writeEvidencePacket({
@@ -132,7 +138,7 @@ export class GuardianMeshEngine {
       ragContext: ragHits,
       modelVersions: this.modelVersions,
     });
-    stages.push({ stage: "evidence_packet", status: "complete", latencyMs: 0 });
+    pushStage({ stage: "evidence_packet", status: "complete", latencyMs: 0 });
 
     let ttsWarningPath: string | undefined;
     if (risk.verdict !== "ALLOW") {
@@ -148,7 +154,7 @@ export class GuardianMeshEngine {
         samples: tts.samples,
         sampleRate: tts.sampleRate,
       });
-      stages.push({
+      pushStage({
         stage: "tts",
         status: "complete",
         latencyMs: Math.round(performance.now() - t3),
@@ -179,17 +185,21 @@ export class GuardianMeshEngine {
     result.telegramSent = tg.sent;
     result.telegramMessageId = tg.messageId;
     if (tg.sent) {
-      stages.push({ stage: "telegram", status: "complete", latencyMs: 0 });
+      pushStage({ stage: "telegram", status: "complete", latencyMs: 0 });
     } else {
-      stages.push({ stage: "telegram", status: "skipped", latencyMs: 0, detail: "not configured" });
+      pushStage({ stage: "telegram", status: "skipped", latencyMs: 0, detail: "not configured" });
     }
 
     return result;
   }
 
-  async processImage(imagePath: string): Promise<GuardianIncidentResult> {
+  async processImage(imagePath: string, hooks?: PipelineHooks): Promise<GuardianIncidentResult> {
     await this.preload();
     const stages: PipelineStageResult[] = [];
+    const pushStage = (stage: PipelineStageResult) => {
+      stages.push(stage);
+      hooks?.onStage?.(stage);
+    };
     const incidentId = randomUUID();
     const inputBuffer = readFileSync(imagePath);
     const inputHash = hashFileContents(inputBuffer);
@@ -197,7 +207,7 @@ export class GuardianMeshEngine {
     const t0 = performance.now();
     const ocr = await this.qvac.runOcr({ imagePath });
     this.modelVersions[ocr.modelSrc] = ocr.modelId;
-    stages.push({
+    pushStage({
       stage: "ocr",
       status: "complete",
       latencyMs: Math.round(performance.now() - t0),
@@ -206,7 +216,7 @@ export class GuardianMeshEngine {
 
     const t1 = performance.now();
     const ragHits = await this.rag.searchContext(ocr.text);
-    stages.push({
+    pushStage({
       stage: "rag",
       status: "complete",
       latencyMs: Math.round(performance.now() - t1),
@@ -215,7 +225,7 @@ export class GuardianMeshEngine {
 
     const t2 = performance.now();
     const risk = await this.risk.analyze({ content: ocr.text, ragContext: ragHits });
-    stages.push({
+    pushStage({
       stage: "risk",
       status: "complete",
       latencyMs: Math.round(performance.now() - t2),
@@ -254,7 +264,7 @@ export class GuardianMeshEngine {
       ragContext: ragHits,
       modelVersions: this.modelVersions,
     });
-    stages.push({ stage: "evidence_packet", status: "complete", latencyMs: 0 });
+    pushStage({ stage: "evidence_packet", status: "complete", latencyMs: 0 });
 
     let ttsWarningPath: string | undefined;
     if (risk.verdict !== "ALLOW") {
@@ -270,7 +280,7 @@ export class GuardianMeshEngine {
         samples: tts.samples,
         sampleRate: tts.sampleRate,
       });
-      stages.push({
+      pushStage({
         stage: "tts",
         status: "complete",
         latencyMs: Math.round(performance.now() - t3),
@@ -300,6 +310,11 @@ export class GuardianMeshEngine {
     const tg = await this.telegram.sendIncidentAlert({ result, elderName: this.config.elderName });
     result.telegramSent = tg.sent;
     result.telegramMessageId = tg.messageId;
+    if (tg.sent) {
+      pushStage({ stage: "telegram", status: "complete", latencyMs: 0 });
+    } else {
+      pushStage({ stage: "telegram", status: "skipped", latencyMs: 0, detail: "not configured" });
+    }
 
     return result;
   }

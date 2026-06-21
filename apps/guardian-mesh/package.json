@@ -7,10 +7,12 @@
     "./server.js": "./dist/server.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "dotenv -e ../../.env -- tsx watch src/main.ts",
-    "start": "dotenv -e ../../.env -- node dist/main.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "npm run build:ui && tsc -p tsconfig.json",
+    "build:ui": "npm install --prefix ui && npm run build --prefix ui",
+    "dev": "dotenv -e ../../.env --override -- tsx watch src/main.ts",
+    "dev:ui": "npm run dev --prefix ui",
+    "start": "dotenv -e ../../.env --override -- node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm run typecheck --prefix ui"
   },
   "dependencies": {
     "@kinkeeper/guardian-mesh": "*",

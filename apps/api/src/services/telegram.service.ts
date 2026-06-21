@@ -44,9 +44,13 @@ function isTelegramPollConflict(error: unknown): boolean {
   return false;
 }
 
+function resolveGuardianEvidenceDir(): string {
+  const dataDir = process.env.GUARDIAN_MESH_DATA_DIR ?? join(process.cwd(), "guardian-mesh-data");
+  return process.env.EVIDENCE_DIR ?? join(dataDir, "evidence");
+}
+
 function logGuardianMeshAck(incidentId: string, chatId: string): void {
-  const evidenceDir = process.env.EVIDENCE_DIR ?? join(process.cwd(), "evidence");
-  const dir = join(evidenceDir, "guardian-mesh");
+  const dir = join(resolveGuardianEvidenceDir(), "telegram");
   mkdirSync(dir, { recursive: true });
   appendFileSync(
     join(dir, "telegram-acks.jsonl"),
@@ -201,10 +205,17 @@ export class TelegramService {
 
     this.bot.on("callback_query:data", async (ctx) => {
       const data = ctx.callbackQuery.data;
-      await ctx.answerCallbackQuery();
-      if (!ctx.chat) return;
+      const chatId = (ctx.chatId ?? ctx.callbackQuery.message?.chat?.id)?.toString();
 
-      const chatId = ctx.chat.id.toString();
+      try {
+        await ctx.answerCallbackQuery({
+          text: data.startsWith("ack:") ? "Acknowledged ✓" : undefined,
+        });
+      } catch (err) {
+        console.error("[telegram] answerCallbackQuery failed:", err);
+      }
+
+      if (!chatId) return;
 
       if (data.startsWith("ack:")) {
         const incidentId = data.slice("ack:".length);
@@ -229,15 +240,15 @@ export class TelegramService {
         return;
       }
       if (data === "status") {
-        await this.sendStatus(ctx.chat.id.toString());
+        await this.sendStatus(chatId);
         return;
       }
       if (data === "alerts") {
-        await this.sendAlertsList(ctx.chat.id.toString());
+        await this.sendAlertsList(chatId);
         return;
       }
       if (data === "help") {
-        await this.sendMenuMessage(ctx.chat.id.toString(), this.helpText(), { parseMode: "Markdown" });
+        await this.sendMenuMessage(chatId, this.helpText(), { parseMode: "Markdown" });
       }
     });
 

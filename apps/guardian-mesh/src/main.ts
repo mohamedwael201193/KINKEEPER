@@ -7,7 +7,7 @@ import { startGuardianMeshServer } from "./server.js";
 const repoRoot = join(import.meta.dirname, "..", "..", "..");
 for (const envPath of [join(repoRoot, ".env"), join(process.cwd(), ".env")]) {
   if (existsSync(envPath)) {
-    config({ path: envPath });
+    config({ path: envPath, override: true });
     break;
   }
 }

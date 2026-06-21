@@ -1,5 +1,5 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { createReadStream, existsSync } from "node:fs";
+import { createServer, type ServerResponse } from "node:http";
+import { createReadStream, existsSync, statSync } from "node:fs";
 import { join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { QvacService } from "@kinkeeper/qvac";
@@ -12,6 +12,17 @@ import {
   type GuardianIncidentResult,
   type GuardianUiMode,
 } from "@kinkeeper/guardian-mesh";
+import { listIncidentHistory, loadIncidentPacket, readTelegramAcks, resultToSummary } from "./history.js";
+import { pipelineHooks } from "./pipeline-runner.js";
+import {
+  beginProcessing,
+  completeProcessing,
+  failProcessing,
+  getProcessingState,
+  markUploadComplete,
+} from "./processing-state.js";
+import { AUDIO_EXT, IMAGE_EXT, readJsonBody, saveBase64Upload } from "./upload.js";
+import { isValidEvidencePacket, parseIncidentIdFromPath } from "./routes.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "..", "public");
@@ -34,15 +45,6 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body, null, 2));
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.from(chunk));
-  }
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
-}
-
 function staticFile(res: ServerResponse, path: string): void {
   if (!existsSync(path)) {
     sendJson(res, 404, { error: "not found" });
@@ -56,9 +58,32 @@ function staticFile(res: ServerResponse, path: string): void {
         ? "application/javascript"
         : ext === ".css"
           ? "text/css"
-          : "application/octet-stream";
+          : ext === ".svg"
+            ? "image/svg+xml"
+            : ext === ".woff2"
+              ? "font/woff2"
+              : "application/octet-stream";
   res.writeHead(200, { "content-type": type });
   createReadStream(path).pipe(res);
+}
+
+function serveSpa(res: ServerResponse): void {
+  const indexPath = join(publicDir, "index.html");
+  if (existsSync(indexPath)) {
+    staticFile(res, indexPath);
+    return;
+  }
+  sendJson(res, 404, { error: "UI not built. Run: npm run build:ui -w @kinkeeper/guardian-mesh-app" });
+}
+
+function tryStaticAsset(res: ServerResponse, pathname: string): boolean {
+  if (pathname.includes("..")) return false;
+  const assetPath = join(publicDir, pathname);
+  if (existsSync(assetPath) && statSync(assetPath).isFile()) {
+    staticFile(res, assetPath);
+    return true;
+  }
+  return false;
 }
 
 async function runScenario(id: string): Promise<GuardianIncidentResult> {
@@ -71,17 +96,32 @@ async function runScenario(id: string): Promise<GuardianIncidentResult> {
     throw new Error(`Asset missing: ${path}`);
   }
   const eng = await getEngine();
-  return scenario.type === "audio" ? eng.processAudio(path) : eng.processImage(path);
+  const inputType = scenario.type === "audio" ? "audio" : "image";
+  beginProcessing(inputType);
+  try {
+    markUploadComplete();
+    const result =
+      scenario.type === "audio"
+        ? await eng.processAudio(path, pipelineHooks())
+        : await eng.processImage(path, pipelineHooks());
+    completeProcessing();
+    lastResult = result;
+    return result;
+  } catch (error) {
+    failProcessing(error instanceof Error ? error.message : String(error));
+    throw error;
+  }
 }
 
 export async function startGuardianMeshServer(port = 8787): Promise<void> {
   const config = loadGuardianMeshConfig();
+  const uploadsDir = join(config.dataDir, "uploads");
   if (config.telegramBotToken && config.telegramChatId) {
     const bootstrap = new GuardianMeshEngine(new QvacService(), config);
     void bootstrap.startTelegramListener().catch((err) => {
       if (String(err).includes("409") || String(err).includes("Conflict")) {
         process.stderr.write(
-          "[guardian-mesh] Telegram listener unavailable (409) — Judge UI continues without ack polling.\n",
+          "[guardian-mesh] Telegram listener unavailable (409) — UI continues without ack polling.\n",
         );
         return;
       }
@@ -103,8 +143,12 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
     const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
 
     try {
+      if (req.method === "GET" && url.pathname.startsWith("/assets/")) {
+        if (tryStaticAsset(res, url.pathname.slice(1))) return;
+      }
+
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-        staticFile(res, join(publicDir, "index.html"));
+        serveSpa(res);
         return;
       }
 
@@ -115,26 +159,50 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
 
       if (req.method === "GET" && url.pathname === "/api/status") {
         const eng = await getEngine();
+        const chain = eng.verifyChain();
+        const history = listIncidentHistory(config.evidenceDir);
+        const telegramConfigured = Boolean(config.telegramBotToken && config.telegramChatId);
         sendJson(res, 200, {
           product: "KINKEEPER Guardian Mesh",
           local: true,
           providerPublicKey: eng.getProviderPublicKey(),
-          chain: eng.verifyChain(),
-          lastIncident: lastResult?.incidentId ?? null,
+          chain,
+          lastIncident: lastResult?.incidentId ?? history[0]?.incidentId ?? null,
+          incidentCount: history.length,
           scenarios: getGuardianScenarios(repoRoot),
+          stats: {
+            totalIncidents: history.length,
+            blockCount: history.filter((h) => h.verdict === "BLOCK").length,
+            warnCount: history.filter((h) => h.verdict === "WARN").length,
+            allowCount: history.filter((h) => h.verdict === "ALLOW").length,
+            chainValid: chain.valid,
+            telegramConfigured,
+            scamCallsDetected: history.filter(
+              (h) => h.inputType === "audio" && (h.verdict === "BLOCK" || h.verdict === "WARN"),
+            ).length,
+            fraudAttemptsBlocked: history.filter((h) => h.verdict === "BLOCK").length,
+            evidencePackagesGenerated: chain.count,
+            telegramAlertsSent: telegramConfigured
+              ? history.filter((h) => h.verdict === "BLOCK" || h.verdict === "WARN").length
+              : 0,
+          },
         });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/processing") {
+        sendJson(res, 200, getProcessingState());
         return;
       }
 
       if (req.method === "GET" && url.pathname === "/api/proof") {
         const eng = await getEngine();
-        const cfg = loadGuardianMeshConfig();
         sendJson(
           res,
           200,
           buildProofSnapshot({
             engine: eng,
-            config: cfg,
+            config,
             repoRoot,
             lastProfilerSummary: lastResult?.profilerSummary,
           }),
@@ -147,10 +215,116 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
         return;
       }
 
+      if (req.method === "GET" && url.pathname === "/api/history") {
+        const q = url.searchParams.get("q")?.toLowerCase() ?? "";
+        const verdict = url.searchParams.get("verdict")?.toUpperCase();
+        let items = listIncidentHistory(config.evidenceDir);
+        if (q) {
+          items = items.filter(
+            (i) =>
+              i.incidentId.includes(q) ||
+              i.scamType?.toLowerCase().includes(q) ||
+              i.inputPath.toLowerCase().includes(q),
+          );
+        }
+        if (verdict && ["ALLOW", "WARN", "BLOCK"].includes(verdict)) {
+          items = items.filter((i) => i.verdict === verdict);
+        }
+        sendJson(res, 200, { items, count: items.length });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname.startsWith("/api/incident/")) {
+        const incidentId = parseIncidentIdFromPath(url.pathname, "/api/incident/");
+        if (!incidentId) {
+          sendJson(res, 400, { error: "invalid incident id" });
+          return;
+        }
+        const packet = loadIncidentPacket(config.evidenceDir, incidentId);
+        if (!packet) {
+          sendJson(res, 404, { error: "incident not found", incidentId });
+          return;
+        }
+        sendJson(res, 200, { incidentId, packet });
+        return;
+      }
+
+      // NOTE: /api/evidence/export/ MUST be registered before /api/evidence/ (see routes.ts)
+      if (req.method === "GET" && url.pathname.startsWith("/api/evidence/export/")) {
+        const incidentId = parseIncidentIdFromPath(url.pathname, "/api/evidence/export/");
+        if (!incidentId) {
+          sendJson(res, 400, { error: "invalid incident id" });
+          return;
+        }
+        const packet = loadIncidentPacket(config.evidenceDir, incidentId);
+        if (!packet) {
+          sendJson(res, 404, { error: "evidence not found", incidentId });
+          return;
+        }
+        if (!isValidEvidencePacket(packet)) {
+          sendJson(res, 500, { error: "corrupt evidence packet", incidentId });
+          return;
+        }
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "content-disposition": `attachment; filename="guardian-evidence-${incidentId}.json"`,
+        });
+        res.end(JSON.stringify(packet, null, 2));
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname.startsWith("/api/evidence/")) {
+        const incidentId = parseIncidentIdFromPath(url.pathname, "/api/evidence/");
+        if (!incidentId) {
+          sendJson(res, 400, { error: "invalid incident id" });
+          return;
+        }
+        const packet = loadIncidentPacket(config.evidenceDir, incidentId);
+        if (!packet) {
+          sendJson(res, 404, { error: "evidence not found", incidentId });
+          return;
+        }
+        const eng = await getEngine();
+        sendJson(res, 200, {
+          incidentId,
+          packet,
+          chain: eng.verifyChain(),
+          providerPublicKey: eng.getProviderPublicKey(),
+        });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/telegram/status") {
+        const acks = readTelegramAcks(config.evidenceDir);
+        const history = listIncidentHistory(config.evidenceDir);
+        const alerts = history.map((h) => ({
+          incidentId: h.incidentId,
+          verdict: h.verdict,
+          createdAt: h.createdAt,
+          messageId: h.telegramMessageId,
+          telegramSent: Boolean(config.telegramBotToken && config.telegramChatId),
+          acknowledged: acks.some((a) => a.incidentId === h.incidentId),
+        }));
+        const openIncidents = alerts.filter((a) => !a.acknowledged && a.verdict !== "ALLOW");
+        const resolvedIncidents = alerts.filter((a) => a.acknowledged);
+        sendJson(res, 200, {
+          configured: Boolean(config.telegramBotToken && config.telegramChatId),
+          chatId: config.telegramChatId ? `${config.telegramChatId.slice(0, 4)}…` : null,
+          alerts,
+          acks,
+          pending: alerts.filter((a) => !a.acknowledged).length,
+          acknowledged: alerts.filter((a) => a.acknowledged).length,
+          openIncidents: openIncidents.length,
+          resolvedIncidents: resolvedIncidents.length,
+          alertsSent: alerts.filter((a) => a.telegramSent && (a.verdict === "BLOCK" || a.verdict === "WARN")).length,
+        });
+        return;
+      }
+
       if (req.method === "POST" && url.pathname.startsWith("/api/scenario/")) {
         const id = url.pathname.replace("/api/scenario/", "").toUpperCase();
-        lastResult = await runScenario(id);
-        sendJson(res, 200, { ok: true, result: lastResult });
+        const result = await runScenario(id);
+        sendJson(res, 200, { ok: true, result });
         return;
       }
 
@@ -162,6 +336,59 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
 
       if (req.method === "GET" && url.pathname === "/api/last") {
         sendJson(res, 200, { result: lastResult });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/upload/audio") {
+        const body = await readJsonBody(req);
+        const filename = String(body.filename ?? "upload.wav");
+        const data = String(body.data ?? "");
+        if (!data) {
+          sendJson(res, 400, { error: "missing file data" });
+          return;
+        }
+        beginProcessing("audio");
+        try {
+          const savedPath = await saveBase64Upload(uploadsDir, filename, data, AUDIO_EXT);
+          markUploadComplete();
+          const eng = await getEngine();
+          lastResult = await eng.processAudio(savedPath, pipelineHooks());
+          completeProcessing();
+          sendJson(res, 200, { ok: true, result: lastResult, uploadedPath: savedPath });
+        } catch (error) {
+          failProcessing(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/upload/image") {
+        const body = await readJsonBody(req);
+        const filename = String(body.filename ?? "upload.png");
+        const data = String(body.data ?? "");
+        if (!data) {
+          sendJson(res, 400, { error: "missing file data" });
+          return;
+        }
+        const ext = extname(filename).toLowerCase();
+        if (ext === ".pdf") {
+          sendJson(res, 400, {
+            error: "PDF OCR is not yet supported by the local pipeline. Upload PNG, JPG, or JPEG.",
+          });
+          return;
+        }
+        beginProcessing("image");
+        try {
+          const savedPath = await saveBase64Upload(uploadsDir, filename, data, IMAGE_EXT);
+          markUploadComplete();
+          const eng = await getEngine();
+          lastResult = await eng.processImage(savedPath, pipelineHooks());
+          completeProcessing();
+          sendJson(res, 200, { ok: true, result: lastResult, uploadedPath: savedPath });
+        } catch (error) {
+          failProcessing(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
         return;
       }
 
@@ -195,7 +422,6 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
         const audioResult = await runScenario("A");
         const ocrResult = await runScenario("B");
         const safeResult = await runScenario("G");
-        lastResult = safeResult;
         const eng = await getEngine();
         sendJson(res, 200, {
           ok: true,
@@ -207,7 +433,7 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
           chain: eng.verifyChain(),
           proof: buildProofSnapshot({
             engine: eng,
-            config: loadGuardianMeshConfig(),
+            config,
             repoRoot,
             lastProfilerSummary: safeResult.profilerSummary,
           }),
@@ -216,15 +442,14 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
       }
 
       if (req.method === "POST" && url.pathname === "/api/demo/one-click") {
-        lastResult = await runScenario("A");
+        const audioResult = await runScenario("A");
         let ocrResult: GuardianIncidentResult | null = null;
         try {
           ocrResult = await runScenario("B");
-          lastResult = ocrResult;
         } catch {
           /* optional */
         }
-        sendJson(res, 200, { ok: true, audioResult: lastResult, ocrResult });
+        sendJson(res, 200, { ok: true, audioResult, ocrResult, result: lastResult });
         return;
       }
 
@@ -235,14 +460,24 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
       }
 
       if (req.method === "GET" && url.pathname.startsWith("/api/tts/")) {
-        const incidentId = url.pathname.replace("/api/tts/", "");
-        const wavPath = join(loadGuardianMeshConfig().evidenceDir, "tts", `${incidentId}.wav`);
+        const incidentId = parseIncidentIdFromPath(url.pathname, "/api/tts/");
+        if (!incidentId) {
+          sendJson(res, 400, { error: "invalid incident id" });
+          return;
+        }
+        const wavPath = join(config.evidenceDir, "tts", `${incidentId}.wav`);
         if (!existsSync(wavPath)) {
           sendJson(res, 404, { error: "tts not found" });
           return;
         }
         res.writeHead(200, { "content-type": "audio/wav" });
         createReadStream(wavPath).pipe(res);
+        return;
+      }
+
+      if (req.method === "GET" && !url.pathname.startsWith("/api/")) {
+        if (tryStaticAsset(res, url.pathname.slice(1))) return;
+        serveSpa(res);
         return;
       }
 
@@ -259,7 +494,7 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
       if (err.code === "EADDRINUSE") {
         reject(
           new Error(
-            `Port ${port} is already in use. Stop the other Guardian Mesh process (or close Start-Guardian-Mesh.bat) and retry.`,
+            `Port ${port} is already in use. Stop the other Guardian Mesh process and retry.`,
           ),
         );
         return;
@@ -269,5 +504,7 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
     server.listen(port, "127.0.0.1", () => resolve());
   });
 
-  process.stderr.write(`[guardian-mesh] Judge UI: http://127.0.0.1:${port}/\n`);
+  process.stderr.write(`[guardian-mesh] Guardian Mesh UI: http://127.0.0.1:${port}/\n`);
 }
+
+export { resultToSummary };

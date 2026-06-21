@@ -38,7 +38,8 @@ if not exist ".env" (
 
 echo.
 echo Starting local QVAC server (first run downloads models)...
-start "Guardian Mesh" /MIN cmd /c "node apps\guardian-mesh\dist\main.js"
+set GUARDIAN_TELEGRAM_ACK_LISTENER=true
+start "Guardian Mesh" /MIN cmd /c "set GUARDIAN_TELEGRAM_ACK_LISTENER=true&& node apps\guardian-mesh\dist\main.js"
 timeout /t 12 /nobreak >nul
 start http://127.0.0.1:8787/
 echo.

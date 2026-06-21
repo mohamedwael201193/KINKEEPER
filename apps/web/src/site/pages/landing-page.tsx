@@ -3,7 +3,6 @@ import {
   Bell,
   Brain,
   Eye,
-  FileSearch,
   Link2,
   Mic,
   ScanText,
