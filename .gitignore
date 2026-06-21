@@ -55,4 +55,6 @@ release/guardian-desktop/
 LIVE_PIPELINE_RESULTS.json
 render-env-paste.txt
 
-# All *.md documentation is intentionally tracked (not ignored)
+# Documentation — only README.md is tracked on GitHub
+*.md
+!README.md

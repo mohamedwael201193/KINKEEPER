@@ -6,8 +6,7 @@
 <p align="center">
   <a href="LICENSE">Apache-2.0</a> ·
   Node ≥ 22.17 ·
-  QVAC local inference ·
-  <a href="docs/JUDGE_RUNBOOK.md">Judge runbook</a>
+  QVAC local inference
 </p>
 
 <p align="center">
@@ -89,7 +88,7 @@ flowchart LR
 
 ## Live product screenshots
 
-Screenshots are **planned** — files are not committed yet. See [docs/SCREENSHOT_PLAN.md](docs/SCREENSHOT_PLAN.md).
+Screenshots are optional local assets under `docs/screenshots/` (not committed).
 
 | Screenshot | Description |
 |---|---|
@@ -102,7 +101,7 @@ Screenshots are **planned** — files are not committed yet. See [docs/SCREENSHO
 | ![Telegram](docs/screenshots/telegram-alert.png) | Caregiver Telegram alert |
 | ![Evidence chain](docs/screenshots/evidence-chain.png) | Verify Chain — VALID |
 
-> Images will render once PNGs are added under `docs/screenshots/` per [docs/README_ASSETS_CHECKLIST.md](docs/README_ASSETS_CHECKLIST.md).
+> Add PNGs locally under `docs/screenshots/` if you want images in this README.
 
 ---
 
@@ -137,7 +136,7 @@ sequenceDiagram
 3. Click **▶ 3-Min Judge Demo**
 4. Click **Verify Chain** and **Refresh QVAC Proof**
 
-Full steps: [docs/JUDGE_RUNBOOK.md](docs/JUDGE_RUNBOOK.md)
+Full steps are in the **Judge guide** section below.
 
 ---
 
@@ -238,14 +237,14 @@ Config: `config/default/default.config.json` · Models registry: `packages/qvac/
 ### What this is not
 
 - **Not** a hardware security module or bank fraud guarantee
-- **Not** formally verified like a wallet signing firewall (see [COMPETITOR_FINAL_RANKING.md](COMPETITOR_FINAL_RANKING.md))
+- **Not** formally verified like a wallet signing firewall
 - **Not** penetration-tested by a third party — automated unit tests only
 
 ---
 
 ## Judge guide
 
-> **Start here:** [docs/JUDGE_RUNBOOK.md](docs/JUDGE_RUNBOOK.md)
+> **Start here:** Judge guide section below.
 
 ### Fastest path (Windows)
 
@@ -309,7 +308,7 @@ npm run guardian:telegram   # PASS (prior run) — evidence/telegram-verify.json
 
 **`guardian:scenarios`** — zero mismatches across A–H + W.
 
-**Ship audit score:** 9.8/10 — [FINAL_10_OF_10_AUDIT.md](FINAL_10_OF_10_AUDIT.md)
+**Ship audit score:** 9.8/10 (local verification scripts in `scripts/`).
 
 ---
 
@@ -372,7 +371,7 @@ npm run dev:api         # terminal 2
 npm run dev:web         # terminal 3
 ```
 
-Cloud deployment manifests: see [MASTER_RELEASE_DOCUMENT.md](MASTER_RELEASE_DOCUMENT.md). **Not implemented** as a one-click judge path.
+Cloud deployment for the legacy web/API stack is optional and not part of the Guardian Mesh judge demo.
 
 ---
 
@@ -417,7 +416,7 @@ Node ≥ 22.17 and npm ≥ 10.9 per root `package.json` `engines` field (QVAC qu
 <details>
 <summary><strong>How much disk space do models need?</strong></summary>
 
-First inference downloads QVAC models. Audit machine cache: ~1223 MB in `evidence/fresh-machine-validation.json`. Fresh machines should budget ~2–4 GB per `FINAL_10_OF_10_AUDIT.md`.
+First inference downloads QVAC models. Budget ~2–4 GB disk for the model cache on a fresh machine.
 </details>
 
 <details>
@@ -563,19 +562,6 @@ npm run guardian:scenarios
 4. Open a pull request with a clear description and test evidence
 
 Please do not commit `.env`, JWT keys, or Telegram tokens.
-
----
-
-## Related documentation
-
-| Document | Purpose |
-|---|---|
-| [docs/JUDGE_RUNBOOK.md](docs/JUDGE_RUNBOOK.md) | Evaluator step-by-step |
-| [DEMO_RUNBOOK.md](DEMO_RUNBOOK.md) | Short demo script |
-| [FINAL_10_OF_10_AUDIT.md](FINAL_10_OF_10_AUDIT.md) | Ship gate evidence |
-| [FINAL_SHIP_READINESS_REPORT.md](FINAL_SHIP_READINESS_REPORT.md) | Readiness summary |
-| [COMPETITOR_FINAL_RANKING.md](COMPETITOR_FINAL_RANKING.md) | Competitive analysis |
-| [MASTER_RELEASE_DOCUMENT.md](MASTER_RELEASE_DOCUMENT.md) | Legacy full-platform reference |
 
 ---
 
