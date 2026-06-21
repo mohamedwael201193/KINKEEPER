@@ -3,19 +3,85 @@ import type { ReactNode } from "react";
 
 export const ease = [0.22, 1, 0.36, 1] as const;
 
-export function PageShell({ children }: { children: ReactNode }) {
+/** Stable site shell — does NOT remount on route changes. */
+export function SiteShell({ children }: { children: ReactNode }) {
+  return <div className="min-h-screen bg-canvas text-ink">{children}</div>;
+}
+
+/** Top-level page fade — use only for main route segments, not docs sub-nav. */
+export function PageTransition({ routeKey, children }: { routeKey: string; children: ReactNode }) {
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        key={typeof window !== "undefined" ? window.location.pathname : "page"}
-        initial={{ opacity: 0, y: 12 }}
+        key={routeKey}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.45, ease }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.35, ease }}
       >
         {children}
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+/** Docs content crossfade — sidebar stays mounted. */
+export function DocsContentTransition({ slug, children }: { slug: string; children: ReactNode }) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={slug || "overview"}
+        initial={{ opacity: 0, x: 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -8 }}
+        transition={{ duration: 0.28, ease }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+export function RevealSection({
+  children,
+  className,
+  delay = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-60px" }}
+      transition={{ duration: 0.7, delay, ease }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+export function FadeIn({
+  children,
+  className,
+  delay = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay, ease }}
+      className={className}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -27,7 +93,7 @@ export function Stagger({ children, className }: { children: ReactNode; classNam
       viewport={{ once: true, margin: "-80px" }}
       variants={{
         hidden: {},
-        show: { transition: { staggerChildren: 0.08 } },
+        show: { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
       }}
       className={className}
     >
@@ -40,8 +106,8 @@ export function StaggerItem({ children, className }: { children: ReactNode; clas
   return (
     <motion.div
       variants={{
-        hidden: { opacity: 0, y: 24 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.55, ease } },
+        hidden: { opacity: 0, y: 28 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.65, ease } },
       }}
       className={className}
     >
@@ -56,7 +122,7 @@ export function ScrollProgress({ className }: { className?: string }) {
   return (
     <motion.div
       style={{ scaleX }}
-      className={`fixed left-0 top-0 z-50 h-0.5 origin-left bg-accent ${className ?? ""}`}
+      className={`fixed left-0 top-0 z-50 h-[2px] origin-left bg-gradient-to-r from-accent via-accent-muted to-accent ${className ?? ""}`}
     />
   );
 }
@@ -149,4 +215,9 @@ export function TelegramFlyout({ message, visible }: { message: string; visible:
       ) : null}
     </AnimatePresence>
   );
+}
+
+/** @deprecated Use SiteShell + PageTransition instead */
+export function PageShell({ children }: { children: ReactNode }) {
+  return <SiteShell>{children}</SiteShell>;
 }

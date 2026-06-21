@@ -9,7 +9,7 @@ import ArchitecturePage from "@/site/pages/architecture-page";
 import SecurityPage from "@/site/pages/security-page";
 import FaqPage from "@/site/pages/faq-page";
 import InstallPage, { DemoPage, DownloadPage } from "@/site/pages/product-pages";
-import { DocsLayout, DocsHomePage } from "@/site/pages/docs/docs-layout";
+import { DocsHomePage, DocsLayout } from "@/site/pages/docs/docs-layout";
 import { DocArticlePage } from "@/site/pages/docs/doc-articles";
 
 const rootRoute = createRootRoute({
@@ -90,7 +90,10 @@ const routeTree = rootRoute.addChildren([
   faqRoute,
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  defaultPreload: "intent",
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

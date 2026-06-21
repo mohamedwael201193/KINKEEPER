@@ -19,3 +19,9 @@
     @apply bg-accent/20 text-ink;
   }
 }
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

@@ -25,6 +25,10 @@ import { JsonLd, SeoHead } from "@/site/components/seo-head";
 import { SectionShell } from "@/site/components/section-shell";
 import { MarketingShell } from "@/site/layout/marketing-shell";
 import { Card, CardContent } from "@/components/ui/card";
+import { GradientOrbs, GrainOverlay } from "@/site/components/gradient-orbs";
+import { AnimatedStat, ThreatMarquee } from "@/site/components/animated-stats";
+import { HeroProductMock } from "@/site/components/hero-product-mock";
+import { FadeIn } from "@/features/motion/motion-system";
 
 const CAPABILITIES = [
   {
@@ -96,22 +100,24 @@ export default function LandingPage() {
       <SeoHead path="/" />
       <JsonLd data={HOME_JSON_LD} />
 
-      {/* Hero */}
-      <section className="relative overflow-hidden px-4 pb-20 pt-10 md:px-8 md:pb-28 md:pt-16">
+      {/* Hero — DeepJudge-inspired split layout */}
+      <section className="relative min-h-[90vh] overflow-hidden px-4 pb-16 pt-8 md:px-8 md:pb-24 md:pt-12">
         <MeshHeroBackground />
-        <div className="relative mx-auto max-w-6xl">
+        <GradientOrbs />
+        <GrainOverlay />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
           <Stagger>
             <StaggerItem>
               <Badge className="mb-6">Local AI · Family Safety</Badge>
-              <h1 className="max-w-4xl font-serif text-5xl leading-[1.02] tracking-tight md:text-7xl">
-                Protect Families Before Money Is Lost
+              <h1 className="max-w-4xl font-serif text-5xl leading-[1.02] tracking-tight md:text-7xl lg:text-[5.25rem]">
+                Protect families before money is lost
               </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-muted">
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-muted md:text-xl">
                 KINKEEPER Guardian Mesh uses local AI to detect scam calls, fraudulent invoices, and social
-                engineering attempts before they become financial losses.
+                engineering — on your device, before panic becomes payment.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Button asChild size="lg">
+              <div className="mt-10 flex flex-wrap gap-3">
+                <Button asChild size="lg" className="shadow-card">
                   <Link to="/download">Download Guardian Mesh</Link>
                 </Button>
                 <Button asChild variant="secondary" size="lg">
@@ -123,8 +129,11 @@ export default function LandingPage() {
               </div>
             </StaggerItem>
           </Stagger>
+          <HeroProductMock />
         </div>
       </section>
+
+      <ThreatMarquee />
 
       {/* Problem */}
       <SectionShell
@@ -134,21 +143,22 @@ export default function LandingPage() {
         description="Generic spam filters miss calm impersonators and document fraud. Families need analysis at the moment of decision."
       >
         <div className="mb-12 grid gap-4 sm:grid-cols-3">
-          {FRAUD_STATS.map((stat) => (
-            <Card key={stat.label} className="border-ink/10 bg-white/80">
-              <CardContent className="p-6">
-                <p className="font-serif text-4xl text-accent">{stat.value}</p>
-                <p className="mt-2 text-sm text-ink-muted">{stat.label}</p>
-                <a
-                  href={stat.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-block text-xs text-ink-faint underline-offset-2 hover:text-accent hover:underline"
-                >
-                  Source: {stat.source}
-                </a>
-              </CardContent>
-            </Card>
+          {FRAUD_STATS.map((stat, i) => (
+            <FadeIn key={stat.label} delay={i * 0.08}>
+              <Card className="h-full border-ink/10 bg-white/80 transition-all duration-300 hover:-translate-y-1 hover:border-accent/20 hover:shadow-card">
+                <CardContent className="p-6">
+                  <AnimatedStat value={stat.value} label={stat.label} />
+                  <a
+                    href={stat.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-block text-xs text-ink-faint underline-offset-2 hover:text-accent hover:underline"
+                  >
+                    Source: {stat.source}
+                  </a>
+                </CardContent>
+              </Card>
+            </FadeIn>
           ))}
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
