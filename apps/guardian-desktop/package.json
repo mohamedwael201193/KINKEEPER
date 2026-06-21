@@ -1,0 +1,69 @@
+{
+  "name": "@kinkeeper/guardian-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/electron/main.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "dotenv -e ../../.env -- electron dist/electron/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pack": "npm run build && npx electron-builder --win portable",
+    "pack:installer": "npm run build && npx electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@kinkeeper/guardian-mesh-app": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "electron": "35.1.5",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.8.3"
+  },
+  "build": {
+    "appId": "io.kinkeeper.guardian-mesh",
+    "productName": "KINKEEPER Guardian Mesh",
+    "directories": {
+      "app": "../..",
+      "output": "../../release/guardian-desktop"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/@qvac/**"
+    ],
+    "files": [
+      "apps/guardian-desktop/dist/**/*",
+      "apps/guardian-mesh/dist/**/*",
+      "apps/guardian-mesh/public/**/*",
+      "packages/guardian-mesh/dist/**/*",
+      "packages/qvac/dist/**/*",
+      "packages/shared/dist/**/*",
+      "config/**/*",
+      "test-data/**/*",
+      "node_modules/@qvac/**/*",
+      "node_modules/@kinkeeper/**/*",
+      "node_modules/dotenv/**/*",
+      "node_modules/grammy/**/*",
+      "!**/*.map",
+      "!**/node_modules/**/{CHANGELOG.md,README.md,readme.md,test,__tests__,tests,*.md}"
+    ],
+    "extraMetadata": {
+      "main": "apps/guardian-desktop/dist/electron/main.js"
+    },
+    "win": {
+      "target": ["portable", "nsis"],
+      "artifactName": "KINKEEPER-Guardian-Mesh-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "KINKEEPER-Guardian-Mesh-Portable-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": true
+    },
+    "publish": null
+  }
+}

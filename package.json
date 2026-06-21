@@ -34,7 +34,18 @@
     "dev:qvac-node": "dotenv -e .env -- tsx watch apps/qvac-node/src/main.ts",
     "dev:web": "dotenv -e .env -- npm run dev -w @kinkeeper/web",
     "start:api": "dotenv -e .env -- node apps/api/dist/main.js",
-    "start:qvac-node": "dotenv -e .env -- node apps/qvac-node/dist/main.js"
+    "start:qvac-node": "dotenv -e .env -- node apps/qvac-node/dist/main.js",
+    "build:guardian-mesh": "npm run build -w @kinkeeper/shared && npm run build -w @kinkeeper/qvac && npm run build -w @kinkeeper/guardian-mesh && npm run build -w @kinkeeper/guardian-mesh-app",
+    "dev:guardian-mesh": "dotenv -e .env -- npm run dev -w @kinkeeper/guardian-mesh-app",
+    "start:guardian-mesh": "dotenv -e .env -- npm run start -w @kinkeeper/guardian-mesh-app",
+    "dev:guardian-desktop": "npm run build:guardian-mesh && npm run build -w @kinkeeper/guardian-desktop && dotenv -e .env -- npm run dev -w @kinkeeper/guardian-desktop",
+    "guardian:verify": "dotenv -e .env -- tsx scripts/guardian-mesh-verify.ts",
+    "guardian:scenarios": "dotenv -e .env -- tsx scripts/guardian-mesh-scenarios.ts",
+    "guardian:assets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-scenario-assets.ps1",
+    "telegram:discover": "dotenv -e .env -- tsx scripts/telegram-discover-chat.ts",
+    "guardian:telegram": "dotenv -e .env -- tsx scripts/guardian-telegram-verify.ts",
+    "guardian:fresh": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fresh-machine-validate.ps1",
+    "ship:guardian": "npm run build:guardian-mesh && npm run build -w @kinkeeper/guardian-desktop && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ship-guardian-windows.ps1"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",

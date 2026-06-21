@@ -8,6 +8,9 @@ import {
 } from "./inference-logger.js";
 import {
   getQvacSdk,
+  getDefaultEmbeddingModel,
+  getDefaultOcrModel,
+  getDefaultTtsModel,
   getDefaultLlmModel,
   getDefaultWhisperModel,
   resolveMedPsyModelSource,
@@ -55,6 +58,38 @@ export interface QvacTranscribeResult {
   modelId: string;
 }
 
+export interface QvacOcrBlock {
+  text: string;
+  confidence?: number;
+}
+
+export interface QvacOcrResult {
+  text: string;
+  blocks: QvacOcrBlock[];
+  modelSrc: string;
+  modelId: string;
+}
+
+export interface QvacRagSearchHit {
+  id: string;
+  content: string;
+  score: number;
+}
+
+export interface QvacRagSearchResult {
+  hits: QvacRagSearchHit[];
+  modelSrc: string;
+  modelId: string;
+}
+
+export interface QvacTtsResult {
+  samples: number[];
+  sampleRate: number;
+  modelSrc: string;
+  modelId: string;
+  durationSec: number;
+}
+
 export interface QvacProviderState {
   publicKey: string;
 }
@@ -98,7 +133,7 @@ export class QvacService {
 
   async ensureModel(
     modelSrc: ModelSource,
-    modelType?: "llm" | "whisper" | "embeddings",
+    modelType?: "llm" | "whisper" | "embeddings" | "ocr" | "tts",
     delegate?: {
       providerPublicKey: string;
       fallbackToLocal?: boolean;
@@ -135,7 +170,14 @@ export class QvacService {
             },
           }
         : {}),
-      modelConfig: explicitType === "llm" ? { ctx_size: 4096 } : undefined,
+      modelConfig:
+        explicitType === "llm"
+          ? { ctx_size: 4096 }
+          : explicitType === "tts"
+            ? { ttsEngine: "supertonic", language: "en", voice: "F1" }
+            : explicitType === "ocr"
+              ? { langList: ["en"], useGPU: true }
+              : undefined,
       onProgress: (progress: ModelProgressUpdate) => {
         const pct = Math.floor(progress.percentage);
         const downloadedMb = ((progress as { downloaded?: number }).downloaded ?? 0) / (1024 * 1024);
@@ -279,6 +321,193 @@ export class QvacService {
     });
 
     return { text, segments, stats: transcribeStats, modelSrc: label, modelId };
+  }
+
+  async runOcr(params: {
+    imagePath: string;
+    modelSrc?: ModelSource;
+    familyId?: string | null;
+    deviceId?: string | null;
+    bundleId?: string | null;
+  }): Promise<QvacOcrResult> {
+    const sdk = await getQvacSdk();
+    const modelSrc = params.modelSrc ?? (await getDefaultOcrModel());
+    const label = modelLabel(modelSrc);
+    const modelId = await this.ensureModel(modelSrc, "ocr");
+
+    const started = Date.now();
+    const { blocks } = sdk.ocr({ modelId, image: params.imagePath });
+    const result = await blocks;
+    const text = result.map((b: { text: string }) => b.text).join("\n").trim();
+
+    await this.logger.log({
+      familyId: params.familyId ?? null,
+      deviceId: params.deviceId ?? null,
+      modelSrc: label,
+      operation: "ocr",
+      promptTokens: 0,
+      completionTokens: text.split(/\s+/).filter(Boolean).length,
+      ttftSec: (Date.now() - started) / 1000,
+      tps: null,
+      delegateProvider: null,
+      delegateFallbackUsed: false,
+      bundleId: params.bundleId ?? null,
+    });
+
+    return {
+      text,
+      blocks: result.map((b: { text: string; confidence?: number }) => ({
+        text: b.text,
+        confidence: b.confidence,
+      })),
+      modelSrc: label,
+      modelId,
+    };
+  }
+
+  async runRagIngest(params: {
+    workspace: string;
+    documents: string[];
+    modelSrc?: ModelSource;
+    familyId?: string | null;
+  }): Promise<{ processed: number }> {
+    const sdk = await getQvacSdk();
+    const modelSrc = params.modelSrc ?? (await getDefaultEmbeddingModel());
+    const label = modelLabel(modelSrc);
+    const modelId = await this.ensureModel(modelSrc, "embeddings");
+
+    const started = Date.now();
+    const result = await sdk.ragIngest({
+      modelId,
+      workspace: params.workspace,
+      documents: params.documents,
+      chunk: false,
+    });
+
+    await this.logger.log({
+      familyId: params.familyId ?? null,
+      deviceId: null,
+      modelSrc: label,
+      operation: "ragIngest",
+      promptTokens: 0,
+      completionTokens: result.processed.length,
+      ttftSec: (Date.now() - started) / 1000,
+      tps: null,
+      delegateProvider: null,
+      delegateFallbackUsed: false,
+      bundleId: null,
+    });
+
+    return { processed: result.processed.length };
+  }
+
+  async runRagSearch(params: {
+    workspace: string;
+    query: string;
+    topK?: number;
+    modelSrc?: ModelSource;
+    familyId?: string | null;
+    bundleId?: string | null;
+  }): Promise<QvacRagSearchResult> {
+    const sdk = await getQvacSdk();
+    const modelSrc = params.modelSrc ?? (await getDefaultEmbeddingModel());
+    const label = modelLabel(modelSrc);
+    const modelId = await this.ensureModel(modelSrc, "embeddings");
+
+    const started = Date.now();
+    const raw = await sdk.ragSearch({
+      modelId,
+      workspace: params.workspace,
+      query: params.query,
+      topK: params.topK ?? 5,
+    });
+    const rows = Array.isArray(raw)
+      ? raw
+      : ((raw as { results?: Array<{ id: string; content: string; score: number }> }).results ?? []);
+
+    await this.logger.log({
+      familyId: params.familyId ?? null,
+      deviceId: null,
+      modelSrc: label,
+      operation: "ragSearch",
+      promptTokens: 0,
+      completionTokens: rows.length,
+      ttftSec: (Date.now() - started) / 1000,
+      tps: null,
+      delegateProvider: null,
+      delegateFallbackUsed: false,
+      bundleId: params.bundleId ?? null,
+    });
+
+    return {
+      hits: rows.map((r) => ({
+        id: r.id,
+        content: r.content,
+        score: r.score,
+      })),
+      modelSrc: label,
+      modelId,
+    };
+  }
+
+  async runTextToSpeech(params: {
+    text: string;
+    modelSrc?: ModelSource;
+    familyId?: string | null;
+    bundleId?: string | null;
+  }): Promise<QvacTtsResult> {
+    const sdk = await getQvacSdk();
+    const modelSrc = params.modelSrc ?? (await getDefaultTtsModel());
+    const label = modelLabel(modelSrc);
+    const modelId = await this.ensureModel(modelSrc, "tts", undefined);
+
+    const started = Date.now();
+    const result = sdk.textToSpeech({
+      modelId,
+      text: params.text,
+      inputType: "text",
+      stream: false,
+    });
+    const buffer = await result.buffer;
+    await result.done;
+
+    const sampleRate = 24000;
+    const durationSec = buffer.length / sampleRate;
+
+    await this.logger.log({
+      familyId: params.familyId ?? null,
+      deviceId: null,
+      modelSrc: label,
+      operation: "textToSpeech",
+      promptTokens: params.text.length,
+      completionTokens: buffer.length,
+      ttftSec: (Date.now() - started) / 1000,
+      tps: null,
+      delegateProvider: null,
+      delegateFallbackUsed: false,
+      bundleId: params.bundleId ?? null,
+    });
+
+    return {
+      samples: buffer,
+      sampleRate,
+      modelSrc: label,
+      modelId,
+      durationSec,
+    };
+  }
+
+  async enableProfiler(options?: { mode?: "summary" | "verbose" }): Promise<void> {
+    const { profiler } = await getQvacSdk();
+    profiler.enable({ mode: options?.mode ?? "verbose", includeServerBreakdown: true });
+  }
+
+  exportProfilerSummary(): Promise<string> {
+    return getQvacSdk().then(({ profiler }) => profiler.exportSummary());
+  }
+
+  exportProfilerJson(): Promise<unknown> {
+    return getQvacSdk().then(({ profiler }) => profiler.exportJSON());
   }
 
   async unloadAll(): Promise<void> {

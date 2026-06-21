@@ -3,7 +3,10 @@ export type InferenceOperation =
   | "transcribe"
   | "transcribeStream"
   | "embed"
+  | "ragIngest"
   | "ragSearch"
+  | "ocr"
+  | "textToSpeech"
   | "loadModel"
   | "unloadModel";
 

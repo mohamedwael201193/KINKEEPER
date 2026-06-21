@@ -22,8 +22,13 @@ $pub = if (Test-Path $pubFile) { Get-Content $pubFile -Raw } else { "" }
 $renderUrl = Read-Host "Render API URL (default: https://kinkeeper-api.onrender.com)"
 if ([string]::IsNullOrWhiteSpace($renderUrl)) { $renderUrl = "https://kinkeeper-api.onrender.com" }
 
-$qvacUrl = Read-Host "QVAC tunnel URL (ngrok to localhost:3001, or http://localhost:3001 for testing)"
-if ([string]::IsNullOrWhiteSpace($qvacUrl)) { $qvacUrl = "http://localhost:3001" }
+$qvacUrl = Read-Host "QVAC tunnel HTTPS URL (REQUIRED for Render — e.g. https://abc123.ngrok-free.app)"
+if ([string]::IsNullOrWhiteSpace($qvacUrl)) {
+  throw "QVAC_NODE_URL is required. Render cannot use http://localhost:3001 — use ngrok/Tailscale to your local :3001 qvac-node."
+}
+if ($qvacUrl -match '^https?://(localhost|127\.0\.0\.1|\[::1\])') {
+  throw "QVAC_NODE_URL must be a public tunnel URL, not localhost."
+}
 
 $lines = @(
   "NODE_ENV=production"
@@ -50,7 +55,12 @@ $lines = @(
   "JWT_PUBLIC_KEY=$($pub.Trim())"
 )
 
+$lines = @(
+  "# Render env paste — DO NOT COMMIT. QVAC inference stays on your PC; API reaches it via tunnel only."
+) + $lines
+
 $lines | Set-Content -Path $outFile -Encoding UTF8
 Write-Host "Wrote $outFile"
 Write-Host "Copy each KEY=VALUE into Render Dashboard -> kinkeeper-api -> Environment"
+Write-Host "QVAC_NODE_URL must be your ngrok/Tailscale HTTPS URL while npm run dev:qvac-node is running locally."
 Write-Host "Also set Vercel VITE_API_URL=$renderUrl"

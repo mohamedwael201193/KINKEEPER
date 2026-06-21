@@ -23,17 +23,28 @@ export async function getQvacSdk(): Promise<QvacSdkModule> {
 async function getRegistryModels(): Promise<{
   QWEN3_600M_INST_Q4: ModelSource;
   WHISPER_TINY: ModelSource;
+  GTE_LARGE_FP16: ModelSource;
+  OCR_LATIN_RECOGNIZER_1: ModelSource;
+  TTS_EN_SUPERTONIC_Q8_0: ModelSource;
 }> {
   const sdk = await getQvacSdk();
   const models = sdk as Record<string, ModelSource | undefined>;
   const qwen = models.QWEN3_600M_INST_Q4;
   const whisper = models.WHISPER_TINY;
-  if (!qwen || !whisper) {
-    throw new Error("QVAC SDK model constants QWEN3_600M_INST_Q4 or WHISPER_TINY missing");
+  const embed = models.GTE_LARGE_FP16;
+  const ocr = models.OCR_LATIN_RECOGNIZER_1;
+  const tts = models.TTS_EN_SUPERTONIC_Q8_0;
+  if (!qwen || !whisper || !embed || !ocr || !tts) {
+    throw new Error(
+      "QVAC SDK model constants missing (QWEN3_600M, WHISPER_TINY, GTE_LARGE_FP16, OCR_LATIN_RECOGNIZER_1, TTS_EN_SUPERTONIC_Q8_0)",
+    );
   }
   return {
     QWEN3_600M_INST_Q4: qwen,
     WHISPER_TINY: whisper,
+    GTE_LARGE_FP16: embed,
+    OCR_LATIN_RECOGNIZER_1: ocr,
+    TTS_EN_SUPERTONIC_Q8_0: tts,
   };
 }
 
@@ -45,6 +56,21 @@ export async function getDefaultLlmModel(): Promise<ModelSource> {
 export async function getDefaultWhisperModel(): Promise<ModelSource> {
   const models = await getRegistryModels();
   return models.WHISPER_TINY;
+}
+
+export async function getDefaultEmbeddingModel(): Promise<ModelSource> {
+  const models = await getRegistryModels();
+  return models.GTE_LARGE_FP16;
+}
+
+export async function getDefaultOcrModel(): Promise<ModelSource> {
+  const models = await getRegistryModels();
+  return models.OCR_LATIN_RECOGNIZER_1;
+}
+
+export async function getDefaultTtsModel(): Promise<ModelSource> {
+  const models = await getRegistryModels();
+  return models.TTS_EN_SUPERTONIC_Q8_0;
 }
 
 /** MedPsy GGUF via Hugging Face (official QVAC model repos). */

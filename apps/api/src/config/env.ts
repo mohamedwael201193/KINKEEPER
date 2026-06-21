@@ -62,11 +62,28 @@ function readJwtKey(inline: string | undefined, filePath: string, label: string)
   }
 }
 
+function assertProductionQvacReachable(appEnv: string, qvacNodeUrl: string): void {
+  if (appEnv !== "production") {
+    return;
+  }
+
+  const host = new URL(qvacNodeUrl).hostname.toLowerCase();
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
+  if (loopbackHosts.has(host)) {
+    throw new Error(
+      "QVAC_NODE_URL points to loopback in production. Render cannot reach your PC via localhost. " +
+        "Run apps/qvac-node locally and set QVAC_NODE_URL to an HTTPS tunnel URL (ngrok, Cloudflare Tunnel, or Tailscale Serve).",
+    );
+  }
+}
+
 export function loadEnv(): ApiEnv {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     throw new Error(`Invalid API environment: ${parsed.error.message}`);
   }
+
+  assertProductionQvacReachable(parsed.data.APP_ENV, parsed.data.QVAC_NODE_URL);
 
   return {
     ...parsed.data,

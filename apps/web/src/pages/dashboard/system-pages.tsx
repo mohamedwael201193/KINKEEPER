@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DataProof } from "@/components/data-proof";
+import { QvacSetupBanner } from "@/components/qvac-setup-banner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
@@ -9,6 +10,16 @@ import { PageShell } from "@/features/motion/motion-system";
 import { usePublicProof, usePublicRuntime } from "@/hooks/use-public-proof";
 import { api } from "@/services/api-client";
 import { formatDate, truncateHash } from "@/lib/utils";
+
+function formatModelLabel(modelSrc: string): string {
+  if (!modelSrc.includes("/") && !modelSrc.includes("\\")) return modelSrc;
+  const parts = modelSrc.replace(/\\/g, "/").split("/");
+  const filename = parts[parts.length - 1] ?? modelSrc;
+  if (/medpsy/i.test(filename)) return "MedPsy 1.7B";
+  if (/qwen/i.test(filename)) return "Qwen3 600M";
+  if (/whisper/i.test(filename)) return "Whisper Tiny";
+  return filename;
+}
 
 export function QvacPage() {
   const familyQuery = useQuery({ queryKey: ["qvac-runtime"], queryFn: api.qvacRuntime });
@@ -69,6 +80,8 @@ export function QvacPage() {
           </Badge>
         }
       />
+
+      <QvacSetupBanner qvacStatus={runtimeQuery.data?.live?.status ?? "unhealthy"} />
 
       {useVerified ? (
         <Card className="mb-6 border-accent/20 bg-accent-soft/30">
@@ -176,7 +189,7 @@ export function QvacPage() {
               <div key={log.id} className="grid gap-2 rounded-xl border border-ink/8 p-4 md:grid-cols-4">
                 <div>
                   <p className="text-sm font-medium">{log.operation}</p>
-                  <p className="text-xs text-ink-muted">{log.modelSrc}</p>
+                  <p className="text-xs text-ink-muted">{formatModelLabel(log.modelSrc)}</p>
                 </div>
                 <p className="text-xs text-ink-muted">{formatDate(log.timestamp)}</p>
                 <p className="text-xs">TTFT {log.ttftSec ?? "—"} · TPS {log.tps ?? "—"}</p>
@@ -218,6 +231,8 @@ export function SystemHealthPage() {
   return (
     <PageShell>
       <PageHeader title="Health" description="Is everything running? Green means your family protection is online and ready." />
+
+      <QvacSetupBanner qvacStatus={data.checks.qvacNode} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Object.entries(data.checks).map(([key, value]) => (

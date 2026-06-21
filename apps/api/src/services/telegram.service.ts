@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import type { PrismaClient, Alert } from "@kinkeeper/db";
 import type { AgentDecisionAudit } from "@kinkeeper/shared";
 import { Bot, InlineKeyboard, Keyboard } from "grammy";
@@ -27,6 +29,42 @@ function isTelegramSafeUrl(url: string): boolean {
 
 function alertIdSuffix(alertId: string): string {
   return alertId.slice(-8);
+}
+
+const GUARDIAN_INCIDENT_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function logGuardianMeshAck(incidentId: string, chatId: string): void {
+  const evidenceDir = process.env.EVIDENCE_DIR ?? join(process.cwd(), "evidence");
+  const dir = join(evidenceDir, "guardian-mesh");
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(
+    join(dir, "telegram-acks.jsonl"),
+    `${JSON.stringify({ at: new Date().toISOString(), incidentId, chatId, via: "api_telegram_bot" })}\n`,
+  );
+}
+
+/** Guardian Mesh incidents are not stored in Postgres — any unmatched ack: is a local incident. */
+function isLikelyGuardianMeshAckId(id: string): boolean {
+  if (GUARDIAN_INCIDENT_UUID.test(id)) return true;
+  // Full UUID without strict RFC variant check (Node randomUUID always qualifies above)
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return true;
+  return false;
+}
+
+async function replyGuardianMeshAck(
+  bot: Bot,
+  chatId: string,
+  incidentId: string,
+  replyMarkup?: ReturnType<typeof Keyboard.from>,
+): Promise<void> {
+  logGuardianMeshAck(incidentId, chatId);
+  console.info(`[telegram] Guardian Mesh ack: ${incidentId.slice(0, 8)}… chat=${chatId}`);
+  await bot.api.sendMessage(
+    chatId,
+    `✅ Guardian Mesh incident ${incidentId.slice(0, 8)}… acknowledged. Evidence remains hash-linked on device.`,
+    replyMarkup ? { reply_markup: replyMarkup } : {},
+  );
 }
 
 export class TelegramService {
@@ -156,15 +194,28 @@ export class TelegramService {
       await ctx.answerCallbackQuery();
       if (!ctx.chat) return;
 
-      const chat = await this.requireLinkedChat(ctx.chat.id.toString());
+      const chatId = ctx.chat.id.toString();
+
+      if (data.startsWith("ack:")) {
+        const incidentId = data.slice("ack:".length);
+        const chat = await this.prisma.telegramChat.findUnique({ where: { chatId } });
+        if (chat) {
+          const alert = await this.resolveAlertForUser(chat.userId, incidentId);
+          if (alert) {
+            await this.acknowledgeAlert(chat.userId, chatId, incidentId);
+            return;
+          }
+        }
+        // Guardian Mesh alerts are never in Postgres — acknowledge any unmatched ack:
+        await replyGuardianMeshAck(this.bot!, chatId, incidentId, this.mainMenuKeyboard());
+        return;
+      }
+
+      const chat = await this.requireLinkedChat(chatId);
       if (!chat) return;
 
       if (data.startsWith("evidence:")) {
-        await this.sendEvidence(chat.userId, ctx.chat.id.toString(), data.slice("evidence:".length));
-        return;
-      }
-      if (data.startsWith("ack:")) {
-        await this.acknowledgeAlert(chat.userId, ctx.chat.id.toString(), data.slice("ack:".length));
+        await this.sendEvidence(chat.userId, chatId, data.slice("evidence:".length));
         return;
       }
       if (data === "status") {
@@ -507,6 +558,10 @@ export class TelegramService {
   private async acknowledgeAlert(userId: string, chatId: string, partialId: string): Promise<void> {
     const alert = await this.resolveAlertForUser(userId, partialId);
     if (!alert) {
+      if (isLikelyGuardianMeshAckId(partialId)) {
+        await replyGuardianMeshAck(this.bot!, chatId, partialId, this.mainMenuKeyboard());
+        return;
+      }
       await this.bot!.api.sendMessage(chatId, "Alert not found.", { reply_markup: this.mainMenuKeyboard() });
       return;
     }

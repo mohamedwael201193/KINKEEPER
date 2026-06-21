@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import type { QvacCompletionResult, QvacTranscribeResult } from "./qvac-service.js";
 
 export interface QvacClientOptions {
@@ -64,7 +65,11 @@ export class QvacClient {
       timeout?: number;
     };
   }): Promise<QvacTranscribeResult> {
-    return this.request<QvacTranscribeResult>("/internal/transcribe", body);
+    const payload: Record<string, unknown> = { ...body };
+    if (existsSync(body.audioPath)) {
+      payload.audioBase64 = readFileSync(body.audioPath).toString("base64");
+    }
+    return this.request<QvacTranscribeResult>("/internal/transcribe", payload);
   }
 
   async getProviderPublicKey(): Promise<string | null> {
