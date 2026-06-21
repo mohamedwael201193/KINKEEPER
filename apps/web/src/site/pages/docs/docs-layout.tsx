@@ -37,7 +37,7 @@ function DocsSidebarLink({ slug, title, active }: { slug: string; title: string;
   }
 
   return (
-    <Link to="/docs" {...linkProps}>
+    <Link to="/docs" activeOptions={{ exact: true }} {...linkProps}>
       {inner}
     </Link>
   );
