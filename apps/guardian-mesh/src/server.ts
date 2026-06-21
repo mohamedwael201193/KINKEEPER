@@ -79,6 +79,12 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
   if (config.telegramBotToken && config.telegramChatId) {
     const bootstrap = new GuardianMeshEngine(new QvacService(), config);
     void bootstrap.startTelegramListener().catch((err) => {
+      if (String(err).includes("409") || String(err).includes("Conflict")) {
+        process.stderr.write(
+          "[guardian-mesh] Telegram listener unavailable (409) — Judge UI continues without ack polling.\n",
+        );
+        return;
+      }
       process.stderr.write(`[guardian-mesh] Telegram listener failed: ${String(err)}\n`);
     });
   }
@@ -248,7 +254,18 @@ export async function startGuardianMeshServer(port = 8787): Promise<void> {
     }
   });
 
-  await new Promise<void>((resolve) => {
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            `Port ${port} is already in use. Stop the other Guardian Mesh process (or close Start-Guardian-Mesh.bat) and retry.`,
+          ),
+        );
+        return;
+      }
+      reject(err);
+    });
     server.listen(port, "127.0.0.1", () => resolve());
   });
 

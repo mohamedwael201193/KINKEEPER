@@ -3,6 +3,12 @@ import { join } from "node:path";
 import { Bot, InlineKeyboard } from "grammy";
 import type { GuardianIncidentResult } from "../types.js";
 import { summarizeForCaregiver } from "../evidence/packet-writer.js";
+import {
+  deleteTelegramWebhook,
+  isTelegramPollConflict,
+  stopLocalTelegramPollers,
+  telegramAckListenerEnabled,
+} from "./poll-guard.js";
 
 function logGuardianAck(incidentId: string, chatId: string, via: string): void {
   const evidenceDir = process.env.EVIDENCE_DIR ?? join(process.cwd(), "evidence");
@@ -39,13 +45,42 @@ export class GuardianTelegramNotifier {
     return this.bot;
   }
 
+  private logPollConflict(): void {
+    process.stderr.write(
+      "[guardian-mesh] Telegram ack listener skipped — another process is polling this bot token (dev:api, Render, or a second guardian-mesh). Alerts still send; Acknowledge works when only one poller runs.\n",
+    );
+  }
+
+  private async stopAckBot(): Promise<void> {
+    if (!this.ackBot) return;
+    try {
+      await this.ackBot.stop();
+    } catch {
+      /* ignore */
+    }
+    this.ackBot = null;
+  }
+
+  private handlePollConflict(): void {
+    this.logPollConflict();
+    void this.stopAckBot();
+  }
+
   /**
-   * Polls Telegram for Acknowledge button taps when the API bot is not running.
-   * If dev:api is also polling the same token, this logs a 409 and exits quietly.
+   * Polls Telegram for Acknowledge button taps when no other process uses getUpdates.
+   * Never crashes the host process on Telegram 409 conflicts.
    */
   async startAckListener(): Promise<void> {
     if (!this.token || this.ackListenerStarted) return;
     this.ackListenerStarted = true;
+
+    if (!telegramAckListenerEnabled()) {
+      process.stderr.write("[guardian-mesh] Telegram ack listener disabled (GUARDIAN_TELEGRAM_ACK_LISTENER=false)\n");
+      return;
+    }
+
+    stopLocalTelegramPollers();
+    await deleteTelegramWebhook(this.token);
 
     this.ackBot = new Bot(this.token);
     this.ackBot.on("callback_query:data", async (ctx) => {
@@ -61,22 +96,28 @@ export class GuardianTelegramNotifier {
     });
 
     this.ackBot.catch((err) => {
-      const code = (err.error as { error_code?: number })?.error_code;
-      if (code === 409) {
-        process.stderr.write(
-          "[guardian-mesh] Telegram ack listener skipped (API bot already polling). Restart dev:api with latest code.\n",
-        );
+      if (isTelegramPollConflict(err.error)) {
+        this.handlePollConflict();
         return;
       }
       process.stderr.write(`[guardian-mesh] Telegram ack error: ${String(err.error)}\n`);
     });
 
-    void this.ackBot.start({
-      allowed_updates: ["callback_query"],
-      onStart: () => {
-        process.stderr.write("[guardian-mesh] Telegram ack listener active\n");
-      },
-    });
+    void this.ackBot
+      .start({
+        allowed_updates: ["callback_query"],
+        onStart: () => {
+          process.stderr.write("[guardian-mesh] Telegram ack listener active\n");
+        },
+      })
+      .catch((error: unknown) => {
+        if (isTelegramPollConflict(error)) {
+          this.handlePollConflict();
+          return;
+        }
+        process.stderr.write(`[guardian-mesh] Telegram ack listener failed: ${String(error)}\n`);
+        void this.stopAckBot();
+      });
   }
 
   async sendIncidentAlert(params: {

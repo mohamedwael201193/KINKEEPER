@@ -6,3 +6,4 @@ export * from "./evidence/local-archivist.js";
 export * from "./evidence/packet-writer.js";
 export * from "./proof-center.js";
 export * from "./scenarios.js";
+export { isTelegramPollConflict, telegramAckListenerEnabled } from "./telegram/poll-guard.js";
