@@ -34,6 +34,16 @@ function alertIdSuffix(alertId: string): string {
 const GUARDIAN_INCIDENT_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isTelegramPollConflict(error: unknown): boolean {
+  if (error && typeof error === "object" && "error_code" in error) {
+    return (error as { error_code?: number }).error_code === 409;
+  }
+  if (error && typeof error === "object" && "error" in error) {
+    return (error as { error?: { error_code?: number } }).error?.error_code === 409;
+  }
+  return false;
+}
+
 function logGuardianMeshAck(incidentId: string, chatId: string): void {
   const evidenceDir = process.env.EVIDENCE_DIR ?? join(process.cwd(), "evidence");
   const dir = join(evidenceDir, "guardian-mesh");
@@ -232,14 +242,33 @@ export class TelegramService {
     });
 
     this.bot.catch((err) => {
+      if (isTelegramPollConflict(err.error)) {
+        console.warn(
+          "[telegram] Poll conflict (409) — guardian-mesh or another instance is polling this token. API continues without Telegram polling.",
+        );
+        void this.stop();
+        return;
+      }
       console.error(`Telegram error for update ${err.ctx.update.update_id}:`, err.error);
     });
 
-    void this.bot.start({
-      onStart: () => {
-        console.info(`[telegram] Caregiver bot started as @${this.botUsername ?? "unknown"}`);
-      },
-    });
+    void this.bot
+      .start({
+        onStart: () => {
+          console.info(`[telegram] Caregiver bot started as @${this.botUsername ?? "unknown"}`);
+        },
+      })
+      .catch((error: unknown) => {
+        if (isTelegramPollConflict(error)) {
+          console.warn(
+            "[telegram] Poll conflict (409) — guardian-mesh or another instance is polling this token. API continues without Telegram polling.",
+          );
+          void this.stop();
+          return;
+        }
+        console.error("[telegram] Bot start failed:", error);
+        void this.stop();
+      });
   }
 
   async stop(): Promise<void> {
